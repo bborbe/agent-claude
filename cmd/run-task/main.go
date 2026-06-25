@@ -16,6 +16,9 @@ import (
 	"context"
 	"os"
 
+	agentlib "github.com/bborbe/agent/lib"
+	claudelib "github.com/bborbe/agent/lib/claude"
+	"github.com/bborbe/agent/lib/envparse"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libsentry "github.com/bborbe/sentry"
@@ -23,9 +26,6 @@ import (
 	"github.com/bborbe/vault-cli/pkg/domain"
 
 	"github.com/bborbe/agent-claude/pkg/factory"
-	agentlib "github.com/bborbe/agent/lib"
-	claudelib "github.com/bborbe/agent/lib/claude"
-	"github.com/bborbe/agent/lib/envparse"
 )
 
 func main() {

@@ -11,16 +11,16 @@ package factory
 import (
 	"context"
 
+	agentlib "github.com/bborbe/agent/lib"
+	claudelib "github.com/bborbe/agent/lib/claude"
+	delivery "github.com/bborbe/agent/lib/delivery"
+	healthcheck "github.com/bborbe/agent/lib/healthcheck"
 	"github.com/bborbe/cqrs/base"
 	libkafka "github.com/bborbe/kafka"
 	libtime "github.com/bborbe/time"
 	"github.com/bborbe/vault-cli/pkg/domain"
 
 	"github.com/bborbe/agent-claude/pkg/prompts"
-	agentlib "github.com/bborbe/agent/lib"
-	claudelib "github.com/bborbe/agent/lib/claude"
-	delivery "github.com/bborbe/agent/lib/delivery"
-	healthcheck "github.com/bborbe/agent/lib/healthcheck"
 )
 
 const serviceName = "agent-claude"
