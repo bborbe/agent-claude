@@ -1,6 +1,14 @@
 include ../../Makefile.variables
 include ../../common.env
 
+# No-op so the recursive `apply` sweep from the parent Makefile.docker doesn't
+# choke on this directory. cmd/run-task is a local CLI for smoke tests, not a
+# deployable artifact.
+.PHONY: apply
+apply:
+	@echo "skip apply for cmd/run-task (local CLI, not deployed)"
+
+
 TASK_FILE ?= dummy-task.md
 BRANCH := dev
 CLAUDE_CONFIG_DIR ?= $(HOME)/.claude-agent
