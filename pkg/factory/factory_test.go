@@ -7,8 +7,8 @@ package factory_test
 import (
 	"context"
 
-	agentlib "github.com/bborbe/agent/lib"
-	claudelib "github.com/bborbe/agent/lib/claude"
+	agentlib "github.com/bborbe/agent"
+	claudelib "github.com/bborbe/agent/claude"
 	libkafka "github.com/bborbe/kafka"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

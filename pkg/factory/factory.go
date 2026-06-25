@@ -11,10 +11,10 @@ package factory
 import (
 	"context"
 
-	agentlib "github.com/bborbe/agent/lib"
-	claudelib "github.com/bborbe/agent/lib/claude"
-	delivery "github.com/bborbe/agent/lib/delivery"
-	healthcheck "github.com/bborbe/agent/lib/healthcheck"
+	agentlib "github.com/bborbe/agent"
+	claudelib "github.com/bborbe/agent/claude"
+	delivery "github.com/bborbe/agent/delivery"
+	healthcheck "github.com/bborbe/agent/healthcheck"
 	"github.com/bborbe/cqrs/base"
 	libkafka "github.com/bborbe/kafka"
 	libtime "github.com/bborbe/time"

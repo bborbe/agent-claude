@@ -16,9 +16,9 @@ import (
 	"context"
 	"os"
 
-	agentlib "github.com/bborbe/agent/lib"
-	claudelib "github.com/bborbe/agent/lib/claude"
-	"github.com/bborbe/agent/lib/envparse"
+	agentlib "github.com/bborbe/agent"
+	claudelib "github.com/bborbe/agent/claude"
+	"github.com/bborbe/agent/envparse"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libsentry "github.com/bborbe/sentry"
