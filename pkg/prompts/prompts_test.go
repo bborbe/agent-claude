@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/bborbe/agent/agent/claude/pkg/prompts"
+	"github.com/bborbe/agent-claude/pkg/prompts"
 )
 
 var _ = Describe("BuildInstructions", func() {

@@ -22,7 +22,7 @@ import (
 	"github.com/bborbe/service"
 	"github.com/bborbe/vault-cli/pkg/domain"
 
-	"github.com/bborbe/agent/agent/claude/pkg/factory"
+	"github.com/bborbe/agent-claude/pkg/factory"
 	agentlib "github.com/bborbe/agent/lib"
 	claudelib "github.com/bborbe/agent/lib/claude"
 	"github.com/bborbe/agent/lib/envparse"
