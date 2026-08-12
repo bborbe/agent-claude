@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-- update Go to 1.26.5, update dependencies, fix GO-2026-5841 in github.com/klauspost/compress
+- chore: update Go to 1.26.5, update dependencies, fix GO-2026-5841 in github.com/klauspost/compress
 
 ## v0.1.2
 
