@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- fix: remove vestigial `include ../../common.env` from `cmd/run-task/Makefile` — leftover monorepo path that broke the recursive `make apply` sweep
+
 ## v0.1.4
 
 - update Go to 1.26.6 and update dependencies (fixes GO-2026-6179, GO-2026-6180 in golang.org/x/mod)
