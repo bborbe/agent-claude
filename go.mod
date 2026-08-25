@@ -1,6 +1,6 @@
 module github.com/bborbe/agent-claude
 
-go 1.26.6
+go 1.27.0
 
 tool (
 	github.com/maxbrunsfeld/counterfeiter/v6
