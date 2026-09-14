@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- chore: update github.com/bborbe/agent to v0.89.0 — pulls github.com/bborbe/errors to v1.6.1, github.com/bborbe/kafka to v1.25.16 and github.com/bborbe/vault-cli to v0.126.3
+- chore: exclude `k8s.io/kube-openapi v0.0.0-20260904170622-9ab3195f2a72` — it pulls `sigs.k8s.io/structured-merge-diff/v7`, which collides with the `v6` the k8s v0.37.0 stack uses and fails to compile in `k8s.io/apimachinery@v0.37.0`
+
 ## v0.2.5
 
 - fix: `make build` refuses to stamp a version onto a tree that is not that version's tag (`check-version-tag`, escape hatch `ALLOW_UNTAGGED_BUILD=1`). `VERSION` defaults to the newest tag repo-wide, so an operator-run build from an untagged or older tree silently republishes under the newest tag. The guard compares `git describe --exact-match HEAD` against `$(VERSION)` and exits non-zero on mismatch.

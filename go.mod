@@ -7,14 +7,14 @@ tool (
 )
 
 require (
-	github.com/bborbe/agent v0.87.1
+	github.com/bborbe/agent v0.89.0
 	github.com/bborbe/cqrs v0.6.10
-	github.com/bborbe/errors v1.6.0
-	github.com/bborbe/kafka v1.25.13
+	github.com/bborbe/errors v1.6.1
+	github.com/bborbe/kafka v1.25.16
 	github.com/bborbe/sentry v1.10.1
 	github.com/bborbe/service v1.10.13
 	github.com/bborbe/time v1.27.14
-	github.com/bborbe/vault-cli v0.122.4
+	github.com/bborbe/vault-cli v0.126.3
 	github.com/golang/glog v1.2.5
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.43.0
@@ -28,11 +28,11 @@ require (
 	github.com/bborbe/collection v1.20.26 // indirect
 	github.com/bborbe/http v1.26.26 // indirect
 	github.com/bborbe/k8s v1.14.19 // indirect
-	github.com/bborbe/kv v1.21.13 // indirect
+	github.com/bborbe/kv v1.21.14 // indirect
 	github.com/bborbe/log v1.6.25 // indirect
 	github.com/bborbe/math v1.4.8 // indirect
-	github.com/bborbe/metrics v0.6.2 // indirect
-	github.com/bborbe/parse v1.11.2 // indirect
+	github.com/bborbe/metrics v0.6.3 // indirect
+	github.com/bborbe/parse v1.11.4 // indirect
 	github.com/bborbe/run v1.10.2 // indirect
 	github.com/bborbe/strimzi v1.8.17 // indirect
 	github.com/bborbe/validation v1.5.0 // indirect
@@ -61,7 +61,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/pprof v0.0.0-20260903180319-d6c3cb2f37ec // indirect
+	github.com/google/pprof v0.0.0-20260906184651-6331bc6350fe // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
@@ -117,4 +117,5 @@ require (
 
 exclude (
 	cloud.google.com/go v0.26.0
+	k8s.io/kube-openapi v0.0.0-20260904170622-9ab3195f2a72
 )
