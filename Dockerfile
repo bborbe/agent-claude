@@ -9,8 +9,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -mod=vendor -ldflags "-s" -a -in
 CMD ["/bin/bash"]
 
 FROM ${DOCKER_REGISTRY}/alpine:3.23 AS alpine
+# Claude Code CLI is pinned so the stream-json protocol the interactive session
+# implementation speaks cannot change under the image at build time.
+# 2.1.286 is the current stable from the npm registry (`npm view @anthropic-ai/claude-code version`).
 RUN apk --no-cache add ca-certificates curl bash nodejs npm \
- && npm install -g --omit=dev --no-optional @anthropic-ai/claude-code \
+ && npm install -g --omit=dev --no-optional @anthropic-ai/claude-code@2.1.286 \
  && npm cache clean --force \
  && apk del npm \
  && rm -rf /root/.npm /tmp/*

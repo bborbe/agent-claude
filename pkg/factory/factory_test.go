@@ -122,6 +122,23 @@ var _ = Describe("CreateFileResultDeliverer", func() {
 	})
 })
 
+var _ = Describe("AgentTypeService", func() {
+	// The executor owns this value (AgentTypeService in the executor's CRD types
+	// package). A mismatch is silent: the binary would simply never leave task
+	// mode, with nothing logged as an error. This pins the cross-repo contract
+	// that has no compile-time check.
+	It(`equals "service"`, func() {
+		Expect(factory.AgentTypeService).To(Equal("service"))
+	})
+})
+
+var _ = Describe("CreateClaudeSessionFactory", func() {
+	It("returns a non-nil SessionFactory", func() {
+		sessions := factory.CreateClaudeSessionFactory("", "", nil, "", nil)
+		Expect(sessions).NotTo(BeNil())
+	})
+})
+
 var _ = Describe("CreateAgent", func() {
 	It("returns a non-nil *agentlib.Agent", func() {
 		agent := factory.CreateAgent(

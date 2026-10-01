@@ -24,6 +24,7 @@ import (
 	claudelib "github.com/bborbe/agent/claude"
 	delivery "github.com/bborbe/agent/delivery"
 	"github.com/bborbe/agent/envparse"
+	interactive "github.com/bborbe/agent/interactive"
 	libmetrics "github.com/bborbe/agent/metrics"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
@@ -60,8 +61,10 @@ type application struct {
 	// Allowed tools (comma-separated)
 	AllowedToolsRaw string `required:"false" arg:"allowed-tools" env:"ALLOWED_TOOLS" usage:"Comma-separated list of allowed tools"`
 
-	// Task content from agent pipeline
-	TaskContent string `required:"true" arg:"task-content" env:"TASK_CONTENT" usage:"Raw task markdown from vault"`
+	// Task content from agent pipeline. Required for a task-routed agent; a
+	// service agent has no task to run, so the requirement is enforced in Run
+	// where the agent shape is known.
+	TaskContent string `required:"false" arg:"task-content" env:"TASK_CONTENT" usage:"Raw task markdown from vault; required unless AGENT_TYPE=service"`
 
 	// Environment context passed to prompt (comma-separated KEY=VALUE pairs)
 	EnvContextRaw string `required:"false" arg:"env-context" env:"ENV_CONTEXT" usage:"Comma-separated KEY=VALUE pairs for prompt context"`
@@ -88,9 +91,25 @@ type application struct {
 	// Phase to run (framework requires explicit phase)
 	Phase domain.TaskPhase `required:"false" arg:"phase" env:"PHASE" usage:"Agent phase: planning | execution | ai_review" default:"execution"`
 
-	// Kafka delivery (optional — only active when TASK_ID is set)
-	KafkaBrokers libkafka.Brokers        `required:"false" arg:"kafka-brokers" env:"KAFKA_BROKERS" usage:"Comma separated list of Kafka brokers"`
-	TaskID       agentlib.TaskIdentifier `required:"false" arg:"task-id"       env:"TASK_ID"       usage:"Agent task identifier for publishing results back to task controller"`
+	// AgentType is the agent shape stamped by the executor from the Config's
+	// spec.type: "service" for a long-running identity agent, empty for a
+	// task-routed one. See factory.AgentTypeService.
+	AgentType string `required:"false" arg:"agent-type" env:"AGENT_TYPE" usage:"Agent shape: 'service' for a long-running identity agent; empty for a task-routed one"`
+
+	// Listen is the address a service agent binds for readiness, metrics and
+	// prompt intake. A task-routed agent runs one task and exits, so it never serves.
+	Listen string `required:"false" arg:"listen" env:"LISTEN" usage:"Address for readiness/metrics (service agents only)" default:":9090"`
+
+	// ProviderBaseURL is the provider endpoint a service agent dials for its
+	// readiness check. Empty means the check is skipped and reported as skipped
+	// rather than guessed at.
+	ProviderBaseURL string `required:"false" arg:"provider-base-url" env:"PROVIDER_BASE_URL" usage:"Provider endpoint; a service agent dials it for readiness"`
+
+	// Kafka delivery (optional — only active when TASK_ID is set). TaskID is a
+	// plain string rather than agentlib.TaskIdentifier so a service agent, which
+	// has no task id, is not rejected by that type's Validate method at parse time.
+	KafkaBrokers libkafka.Brokers `required:"false" arg:"kafka-brokers" env:"KAFKA_BROKERS" usage:"Comma separated list of Kafka brokers"`
+	TaskID       string           `required:"false" arg:"task-id"       env:"TASK_ID"       usage:"Agent task identifier for publishing results back to task controller"`
 
 	PushgatewayURL string `required:"false" arg:"pushgateway-url" env:"PUSHGATEWAY_URL" usage:"Prometheus PushGateway URL"          default:"http://pushgateway:9090"`
 	TaskType       string `required:"false" arg:"task-type"       env:"TASK_TYPE"       usage:"Task type label for metric grouping" default:"unknown"`
@@ -133,23 +152,24 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 			}
 		}()
 		deliverer = factory.CreateKafkaResultDeliverer(
-			syncProducer, a.TopicPrefix, a.TaskID, a.TaskContent,
+			syncProducer, a.TopicPrefix, agentlib.TaskIdentifier(a.TaskID), a.TaskContent,
 			libtime.NewCurrentDateTime(),
 		)
 	}
 
-	claudeEnv := envparse.KeyValuePairs(a.ClaudeEnvRaw)
-	if claudeEnv == nil {
-		claudeEnv = map[string]string{}
+	claudeEnv := a.buildClaudeEnv()
+
+	if a.AgentType == factory.AgentTypeService {
+		return a.runService(ctx, registry, claudeEnv)
 	}
-	if a.AnthropicBaseURL != "" {
-		claudeEnv["ANTHROPIC_BASE_URL"] = a.AnthropicBaseURL
-	}
-	if a.AnthropicAuthToken != "" {
-		claudeEnv["ANTHROPIC_AUTH_TOKEN"] = a.AnthropicAuthToken
-	}
-	if a.AnthropicModel != "" {
-		claudeEnv["ANTHROPIC_MODEL"] = a.AnthropicModel.String()
+	if a.TaskContent == "" {
+		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
+		jobMetrics.RecordDuration(time.Since(start))
+		return errors.Errorf(
+			ctx,
+			"TASK_CONTENT is required for a task-routed agent; it is optional only when AGENT_TYPE=%s",
+			factory.AgentTypeService,
+		)
 	}
 
 	provider := factory.CreateAgentProvider(
@@ -176,4 +196,47 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	jobMetrics.RecordRun(result.Status)
 	jobMetrics.RecordDuration(time.Since(start))
 	return agentlib.PrintResult(ctx, result)
+}
+
+// buildClaudeEnv assembles the environment passed to the Claude CLI process:
+// the ad-hoc CLAUDE_ENV pairs, with the three load-bearing Anthropic provider
+// vars overriding the same keys. Both agent shapes use it — the one-shot runner
+// and the long-lived session take the same config.
+func (a *application) buildClaudeEnv() map[string]string {
+	claudeEnv := envparse.KeyValuePairs(a.ClaudeEnvRaw)
+	if claudeEnv == nil {
+		claudeEnv = map[string]string{}
+	}
+	if a.AnthropicBaseURL != "" {
+		claudeEnv["ANTHROPIC_BASE_URL"] = a.AnthropicBaseURL
+	}
+	if a.AnthropicAuthToken != "" {
+		claudeEnv["ANTHROPIC_AUTH_TOKEN"] = a.AnthropicAuthToken
+	}
+	if a.AnthropicModel != "" {
+		claudeEnv["ANTHROPIC_MODEL"] = a.AnthropicModel.String()
+	}
+	return claudeEnv
+}
+
+// runService is the long-running half of this binary. A service agent has no
+// task to run, so instead of executing one and exiting it stays alive and
+// answers when addressed, holding one conversation per session id.
+func (a *application) runService(
+	ctx context.Context,
+	registry *prometheus.Registry,
+	claudeEnv map[string]string,
+) error {
+	glog.V(2).Infof(
+		"agent-claude service mode: serving readiness, metrics and prompt intake on %s",
+		a.Listen,
+	)
+	sessions := factory.CreateClaudeSessionFactory(
+		a.ClaudeConfigDir,
+		a.AgentDir,
+		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
+		a.AnthropicModel,
+		claudeEnv,
+	)
+	return interactive.NewService(sessions, a.Listen, a.ProviderBaseURL, registry).Run(ctx)
 }

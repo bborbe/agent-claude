@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: `agent-claude` gains a service mode — with `AGENT_TYPE=service` the binary serves readiness, metrics and prompt intake on `LISTEN` (default `:9090`) via the shared `github.com/bborbe/agent/interactive` service instead of running one task and exiting, holding one conversation per session id; the task-routed job path is unchanged
+- feat: add `factory.AgentTypeService` (the `AGENT_TYPE` value the executor stamps from a service Config's `spec.type`) and `factory.CreateClaudeSessionFactory`
+- fix: `TASK_CONTENT` is no longer required at argument-parse time and `TASK_ID` is a plain `string` — a service agent carries neither, and `TaskIdentifier.Validate` rejected the empty id before the pod could reach the service branch
+- chore: update github.com/bborbe/agent to v0.92.0 — pulls in the `interactive` service and the Claude streaming session
+- chore: pin `@anthropic-ai/claude-code` to `2.1.286` in `Dockerfile` so the stream-json protocol the session implementation speaks cannot change under the image at build time
+- fix: depguard's `github.com/bborbe/argument` deny rule now matches v1 exactly (`$` suffix). Prefix matching also denied `github.com/bborbe/argument/v2` — the package its own description says to use — so any file importing it failed `make lint`
+
 ## v0.2.6
 
 - chore: update github.com/bborbe/agent to v0.89.0 — pulls github.com/bborbe/errors to v1.6.1, github.com/bborbe/kafka to v1.25.16 and github.com/bborbe/vault-cli to v0.126.3
