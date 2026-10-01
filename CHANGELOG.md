@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.3.0
 
 - feat: `agent-claude` gains a service mode — with `AGENT_TYPE=service` the binary serves readiness, metrics and prompt intake on `LISTEN` (default `:9090`) via the shared `github.com/bborbe/agent/interactive` service instead of running one task and exiting, holding one conversation per session id; the task-routed job path is unchanged
 - feat: add `factory.AgentTypeService` (the `AGENT_TYPE` value the executor stamps from a service Config's `spec.type`) and `factory.CreateClaudeSessionFactory`
