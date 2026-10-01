@@ -14,11 +14,23 @@ New agents are created by swapping instructions (agent `.claude/CLAUDE.md`) and 
 4. Runs `claude --print --output-format stream-json` with the allowed tools.
 5. Parses the JSON result and publishes to Kafka via `lib/delivery.KafkaResultDeliverer` (when `TASK_ID` set), or falls back to `NoopResultDeliverer` for local runs.
 
+### Service mode
+
+With `AGENT_TYPE=service` the binary takes a second shape: instead of running one task and
+exiting, it serves readiness, metrics and prompt intake on `LISTEN` (default `:9090`) and holds
+one conversation per session id across requests. The HTTP surface comes entirely from the shared
+`github.com/bborbe/agent/interactive` library — this repo adds no routing of its own. The executor
+stamps `AGENT_TYPE=service` from the Config's `spec.type`; a service agent needs neither
+`TASK_CONTENT` nor `TASK_ID`, and `PROVIDER_BASE_URL` is dialled for the readiness check.
+
 ## Env Vars
 
 | Var | Required | Default | Purpose |
 |---|---|---|---|
-| `TASK_CONTENT` | yes | — | Raw task markdown |
+| `TASK_CONTENT` | yes (unless `AGENT_TYPE=service`) | — | Raw task markdown |
+| `AGENT_TYPE` | no | — | `service` for a long-running identity agent; empty for a task-routed one |
+| `LISTEN` | no | `:9090` | Readiness/metrics address (service agents only) |
+| `PROVIDER_BASE_URL` | no | — | Provider endpoint a service agent dials for readiness |
 | `BRANCH` | yes | — | `dev`/`prod` — used as Kafka topic prefix |
 | `TASK_ID` | no | — | Required when publishing results via Kafka |
 | `MODEL` | no | `sonnet` | `sonnet` or `opus` |

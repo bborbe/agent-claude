@@ -25,6 +25,12 @@ import (
 
 const serviceName = "agent-claude"
 
+// AgentTypeService is the AGENT_TYPE value the executor stamps for a Config whose
+// spec.type is service. The executor owns this value; this side only reads it.
+// The coupling is silent when it breaks: a mismatch means the binary stays in
+// task mode and never serves, with nothing logged as an error.
+const AgentTypeService = "service"
+
 // CreateClaudeRunner constructs a ClaudeRunner pre-configured with tools,
 // model, working directory, and CLI environment.
 func CreateClaudeRunner(
@@ -41,6 +47,34 @@ func CreateClaudeRunner(
 		WorkingDirectory: agentDir,
 		Env:              env,
 	})
+}
+
+// CreateClaudeSessionFactory constructs the per-session factory the interactive
+// service holds one conversation per session id with. It takes the same five
+// parameters as CreateClaudeRunner and configures the session's held process
+// identically.
+//
+// The PermissionDecider is passed as nil deliberately: the library currently
+// ships no production PermissionDecider implementation — only the counterfeiter
+// fake in its mocks package — so a nil decider is the only available wiring. A
+// nil decider means the session process is spawned without
+// --permission-prompt-tool stdio, and a tool invocation outside the configured
+// allowlist fails that turn loudly instead of blocking on a decider nobody
+// answers.
+func CreateClaudeSessionFactory(
+	claudeConfigDir claudelib.ClaudeConfigDir,
+	agentDir claudelib.AgentDir,
+	allowedTools claudelib.AllowedTools,
+	model claudelib.ClaudeModel,
+	env map[string]string,
+) agentlib.SessionFactory {
+	return claudelib.NewSessionFactory(claudelib.ClaudeRunnerConfig{
+		ClaudeConfigDir:  claudeConfigDir,
+		AllowedTools:     allowedTools,
+		Model:            model,
+		WorkingDirectory: agentDir,
+		Env:              env,
+	}, nil)
 }
 
 // CreateSyncProducer creates a Kafka sync producer.
