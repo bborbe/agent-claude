@@ -134,7 +134,7 @@ var _ = Describe("AgentTypeService", func() {
 
 var _ = Describe("CreateClaudeSessionFactory", func() {
 	It("returns a non-nil SessionFactory", func() {
-		sessions := factory.CreateClaudeSessionFactory("", "", nil, "", nil)
+		sessions := factory.CreateClaudeSessionFactory("", "", nil, "", nil, nil)
 		Expect(sessions).NotTo(BeNil())
 	})
 })

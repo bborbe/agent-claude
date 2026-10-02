@@ -228,15 +228,26 @@ func (a *application) runService(
 	claudeEnv map[string]string,
 ) error {
 	glog.V(2).Infof(
-		"agent-claude service mode: serving readiness, metrics and prompt intake on %s",
+		"agent-claude service mode: serving readiness, metrics, prompt intake and the permission endpoint on %s",
 		a.Listen,
 	)
+	// One registry, passed to the session factory and to the service together, so
+	// a turn that pauses on a permission request is visible on the service's own
+	// /permission route and answerable from outside the pod.
+	permissions := interactive.NewPermissionRegistry()
 	sessions := factory.CreateClaudeSessionFactory(
 		a.ClaudeConfigDir,
 		a.AgentDir,
 		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 		a.AnthropicModel,
 		claudeEnv,
+		permissions,
 	)
-	return interactive.NewService(sessions, a.Listen, a.ProviderBaseURL, registry).Run(ctx)
+	return interactive.NewServiceWithPermissions(
+		sessions,
+		a.Listen,
+		a.ProviderBaseURL,
+		registry,
+		permissions,
+	).Run(ctx)
 }

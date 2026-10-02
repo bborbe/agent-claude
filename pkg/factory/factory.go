@@ -51,14 +51,18 @@ func CreateClaudeRunner(
 
 // CreateClaudeSessionFactory constructs the per-session factory the interactive
 // service holds one conversation per session id with. It takes the same five
-// parameters as CreateClaudeRunner and configures the session's held process
-// identically.
+// parameters as CreateClaudeRunner, plus the permission decider below, and
+// configures the session's held process identically.
 //
-// The PermissionDecider is passed as nil deliberately: the library currently
-// ships no production PermissionDecider implementation — only the counterfeiter
-// fake in its mocks package — so a nil decider is the only available wiring. A
-// nil decider means the session process is spawned without
-// --permission-prompt-tool stdio, and a tool invocation outside the configured
+// The permissions parameter is the caller's PermissionRegistry, constructed once
+// and handed to this factory and to the permission-enabled service together — one
+// instance, so the endpoint and the sessions resolve through the same registry.
+// That is what makes a paused turn observable outside the pod and answerable from
+// it: the held process consults this decider, which blocks until a caller posts a
+// verdict for it.
+//
+// A nil decider remains valid and means the session process is spawned without
+// --permission-prompt-tool stdio, so a tool invocation outside the configured
 // allowlist fails that turn loudly instead of blocking on a decider nobody
 // answers.
 func CreateClaudeSessionFactory(
@@ -67,6 +71,7 @@ func CreateClaudeSessionFactory(
 	allowedTools claudelib.AllowedTools,
 	model claudelib.ClaudeModel,
 	env map[string]string,
+	permissions claudelib.PermissionDecider,
 ) agentlib.SessionFactory {
 	return claudelib.NewSessionFactory(claudelib.ClaudeRunnerConfig{
 		ClaudeConfigDir:  claudeConfigDir,
@@ -74,7 +79,7 @@ func CreateClaudeSessionFactory(
 		Model:            model,
 		WorkingDirectory: agentDir,
 		Env:              env,
-	}, nil)
+	}, permissions)
 }
 
 // CreateSyncProducer creates a Kafka sync producer.
