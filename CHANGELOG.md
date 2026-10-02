@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.5.0
 
 - chore: update github.com/bborbe/agent to v0.93.1 — the library now passes `--permission-mode manual` to the Claude session process whenever a decider is wired. Without it the CLI ran in its default `auto` mode, which approves a tool invocation without asking, so the decider was never consulted and `GET /permission` stayed empty however many turns ran. With the flag a tool call outside the allow set pauses the turn and appears on the endpoint, which is what the service mode exists to expose.
 
