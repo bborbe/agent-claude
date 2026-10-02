@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.4.0
 
 - feat: wire the service mode to the permission endpoint — `factory.CreateClaudeSessionFactory` takes the caller's `interactive.PermissionRegistry` and passes it where it previously passed a literal `nil`, and `runService` constructs one registry and hands the same instance to both the session factory and `interactive.NewServiceWithPermissions`, so a turn that pauses on a tool permission is observable on `GET /permission` and releasable by `POST /permission`
 - chore: update github.com/bborbe/agent to v0.93.0 — pulls in the permission registry, the `NewServiceWithPermissions` constructor and the `/permission` routes
