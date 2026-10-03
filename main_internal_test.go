@@ -66,6 +66,14 @@ var _ = Describe("application argument parsing", func() {
 			Expect(app.AgentType).To(Equal(""))
 		})
 	})
+
+	It("binds INTERACTIVE_AUTH_TOKEN into the struct field", func() {
+		Expect(os.Setenv("INTERACTIVE_AUTH_TOKEN", "test-token")).To(Succeed())
+		DeferCleanup(func() { _ = os.Unsetenv("INTERACTIVE_AUTH_TOKEN") })
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.InteractiveAuthToken).To(Equal("test-token"))
+	})
 })
 
 var _ = Describe("application.buildClaudeEnv", func() {
@@ -107,7 +115,7 @@ var _ = Describe("application.runService", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		app := &application{Listen: "127.0.0.1:0"}
+		app := &application{Listen: "127.0.0.1:0", InteractiveAuthToken: "test-token"}
 		done := make(chan error, 1)
 		go func() {
 			done <- app.runService(ctx, prometheus.NewRegistry(), map[string]string{})
@@ -116,5 +124,16 @@ var _ = Describe("application.runService", func() {
 		Consistently(done, 100*time.Millisecond).ShouldNot(Receive())
 		cancel()
 		Eventually(done, 10*time.Second).Should(Receive(BeNil()))
+	})
+
+	// Regression guard for the shape-scoped enforcement: the check lives in runService
+	// (where the agent shape is known) rather than in a required:"true" struct tag,
+	// because the tag is evaluated for every agent shape and would also reject
+	// task-routed jobs. This is the boundary the new code crosses — a struct-equality or
+	// constant-value assertion would not exercise it.
+	It("fails to start when no interactive auth token is configured", func() {
+		app := &application{Listen: "127.0.0.1:0"}
+		err := app.runService(context.Background(), prometheus.NewRegistry(), map[string]string{})
+		Expect(err).To(HaveOccurred())
 	})
 })
