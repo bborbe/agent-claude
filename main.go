@@ -105,6 +105,13 @@ type application struct {
 	// rather than guessed at.
 	ProviderBaseURL string `required:"false" arg:"provider-base-url" env:"PROVIDER_BASE_URL" usage:"Provider endpoint; a service agent dials it for readiness"`
 
+	// InteractiveAuthToken is the bearer credential the interactive service requires on
+	// every gated route. It is delivered as a runtime-only pod secret and is never
+	// written into source, an image layer or a committed manifest. The requirement is
+	// enforced in runService, where the agent shape is known: a service that cannot
+	// authenticate must fail to start rather than serve unauthenticated.
+	InteractiveAuthToken string `required:"false" arg:"interactive-auth-token" env:"INTERACTIVE_AUTH_TOKEN" usage:"Bearer token required by the interactive service's gated routes" display:"length"`
+
 	// Kafka delivery (optional — only active when TASK_ID is set). TaskID is a
 	// plain string rather than agentlib.TaskIdentifier so a service agent, which
 	// has no task id, is not rejected by that type's Validate method at parse time.
@@ -227,6 +234,16 @@ func (a *application) runService(
 	registry *prometheus.Registry,
 	claudeEnv map[string]string,
 ) error {
+	// The shape-scoped guard lives here rather than in a required:"true" struct tag:
+	// argument.Parse evaluates required tags for every agent shape, so a tag would also
+	// reject the task-routed jobs, which never serve HTTP. runService is reached only
+	// when the agent shape is a service, so this is where the requirement belongs.
+	if a.InteractiveAuthToken == "" {
+		return errors.Errorf(
+			ctx,
+			"INTERACTIVE_AUTH_TOKEN is required for a service agent; a service that cannot authenticate must not serve unauthenticated",
+		)
+	}
 	glog.V(2).Infof(
 		"agent-claude service mode: serving readiness, metrics, prompt intake and the permission endpoint on %s",
 		a.Listen,
@@ -248,6 +265,7 @@ func (a *application) runService(
 		a.Listen,
 		a.ProviderBaseURL,
 		registry,
+		interactive.NewAuthToken(a.InteractiveAuthToken),
 		permissions,
 	).Run(ctx)
 }
