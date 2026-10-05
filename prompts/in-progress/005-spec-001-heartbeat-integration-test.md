@@ -1,7 +1,8 @@
 ---
-status: draft
+status: approved
 spec: [001-cluster-worker-heartbeat]
 created: "2026-10-05T16:22:00Z"
+queued: "2026-10-05T16:51:20Z"
 branch: dark-factory/cluster-worker-heartbeat
 ---
 

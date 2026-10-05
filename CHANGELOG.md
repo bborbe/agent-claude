@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: add `pkg/heartbeat` — an `ActivityRecorder` that remembers recently-served session ids within a 90s idle cutoff, a `ConfigMapWriter` that read-modify-writes one `refreshedAt` entry per session into the `claude-worker-heartbeats` ConfigMap so a write merges with other writers' keys instead of replacing them, a `Publisher` that re-stamps active sessions every 20s and logs-and-continues on a failed write, and a `NewObservingSessionFactory` decorator that records a session id when its `Prompt` returns; nothing is wired into the running service yet
+
 ## v0.6.0
 
 - feat: the interactive service now requires a bearer token on every gated route — a service agent refuses to start without `INTERACTIVE_AUTH_TOKEN` instead of serving its prompt-intake and permission routes unauthenticated; the task-routed job path is unchanged and does not need the token; the token is delivered as a runtime-only pod secret and its value is redacted from the startup config log

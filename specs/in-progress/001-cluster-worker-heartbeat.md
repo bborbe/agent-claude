@@ -1,6 +1,8 @@
 ---
-status: approved
+status: prompted
 approved: "2026-10-05T16:07:54Z"
+generating: "2026-10-05T16:10:15Z"
+prompted: "2026-10-05T16:34:46Z"
 branch: dark-factory/cluster-worker-heartbeat
 ---
 

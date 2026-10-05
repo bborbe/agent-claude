@@ -1,7 +1,13 @@
 ---
-status: draft
+status: completed
 spec: [001-cluster-worker-heartbeat]
+summary: Added pkg/heartbeat with an activity recorder, a merging ConfigMap heartbeat writer, a refresh publisher and a session-observing factory decorator, all unit-tested; nothing wired into the service yet.
+execution_id: agent-claude-cluster-heartbeat-exec-003-spec-001-heartbeat-writer
+dark-factory-version: v0.196.0
 created: "2026-10-05T16:22:00Z"
+queued: "2026-10-05T16:51:20Z"
+started: "2026-10-05T16:51:21Z"
+completed: "2026-10-05T16:57:16Z"
 branch: dark-factory/cluster-worker-heartbeat
 ---
 
