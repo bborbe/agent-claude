@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [001-cluster-worker-heartbeat]
+summary: Added an in-memory ConfigMapDeployer fake and integration specs in pkg/heartbeat that drive the real recorder/writer/publisher loop and assert the stored entry parses through the reader's refreshedAt/RFC3339 contract, plus end-to-end guards for the write merge, the idle cutoff and the fake's deep-copying Get
+execution_id: agent-claude-cluster-heartbeat-exec-005-spec-001-heartbeat-integration-test
+dark-factory-version: v0.196.0
 created: "2026-10-05T16:22:00Z"
 queued: "2026-10-05T16:51:20Z"
+started: "2026-10-05T17:03:52Z"
+completed: "2026-10-05T17:11:37Z"
 branch: dark-factory/cluster-worker-heartbeat
 ---
 
