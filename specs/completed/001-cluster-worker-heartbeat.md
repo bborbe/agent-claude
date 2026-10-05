@@ -1,9 +1,10 @@
 ---
-status: verifying
+status: completed
 approved: "2026-10-05T16:07:54Z"
 generating: "2026-10-05T16:10:15Z"
 prompted: "2026-10-05T16:34:46Z"
 verifying: "2026-10-05T17:11:37Z"
+completed: "2026-10-05T21:02:49Z"
 branch: dark-factory/cluster-worker-heartbeat
 ---
 
