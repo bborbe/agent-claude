@@ -1,6 +1,7 @@
 ---
-status: draft
-created: 2026-10-05
+status: approved
+approved: "2026-10-05T16:07:54Z"
+branch: dark-factory/cluster-worker-heartbeat
 ---
 
 ## Summary
