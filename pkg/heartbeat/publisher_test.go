@@ -66,6 +66,31 @@ var _ = Describe("Publisher", func() {
 		Eventually(done).Should(Receive(BeNil()))
 	})
 
+	It("writes a notified session at once, without waiting for a tick", func() {
+		// An hour-long interval means no tick can fire during the spec, so a
+		// write observed here can only have come from the notification path.
+		publisher = heartbeat.NewPublisher(
+			recorder,
+			heartbeat.NewConfigMapWriter(
+				deployer,
+				k8s.Namespace("default"),
+				heartbeat.ConfigMapName,
+				currentDateTime,
+			),
+			time.Hour,
+		)
+		cancel, done := start()
+
+		recorder.Record(ctx, "abc")
+
+		Eventually(deployer.DeployCallCount).Should(Equal(1))
+		_, deployed := deployer.DeployArgsForCall(0)
+		Expect(deployed.Data).To(HaveKey("abc"))
+
+		cancel()
+		Eventually(done).Should(Receive(BeNil()))
+	})
+
 	It("writes nothing when no session has been served", func() {
 		cancel, done := start()
 		Consistently(

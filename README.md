@@ -29,7 +29,9 @@ no `INTERACTIVE_AUTH_TOKEN` fails to start.
 
 A service agent publishes its own liveness so the fleet's cluster liveness reader can see it. Every
 20 seconds it stamps one entry per session it has served within the last 90 seconds into the
-`claude-worker-heartbeats` ConfigMap, in the namespace the pod runs in. The key is the session id
+`claude-worker-heartbeats` ConfigMap, in the namespace the pod runs in. A session's first entry is
+stamped the moment it is served, and the 20-second ticker then keeps it fresh while the session
+stays active. The key is the session id
 (the `X-Session-Id` the caller supplies); the value is `{"refreshedAt": "<RFC3339>"}`. The reader
 (`scripts/cluster-heartbeat.py` in `bborbe/claude-supervisor`) treats a stamp older than 60 seconds
 as dead, so a worker that stops being addressed ages out on its own with nothing to clean up. The

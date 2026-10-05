@@ -6,6 +6,7 @@ package heartbeat
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/golang/glog"
@@ -44,6 +45,8 @@ func (p *publisher) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
+		case sessionID := <-p.recorder.Notifications():
+			p.refreshOne(ctx, sessionID)
 		case <-ticker.C:
 			p.refresh(ctx)
 		}
@@ -60,8 +63,26 @@ func (p *publisher) refresh(ctx context.Context) {
 			return
 		default:
 		}
-		if err := p.writer.Write(ctx, sessionID); err != nil {
-			glog.Warningf("cluster heartbeat write failed session=%s: %v", sessionID, err)
-		}
+		p.writeOne(ctx, sessionID)
+	}
+}
+
+// refreshOne stamps one notified session, but only while it is still active.
+//
+// The cutoff is checked here and not only in refresh because a notification
+// can be drained late — the loop may have been inside a slow write — and a
+// session that has since gone idle must not be stamped back to life.
+func (p *publisher) refreshOne(ctx context.Context, sessionID string) {
+	if !slices.Contains(p.recorder.Active(ctx, IdleCutoff), sessionID) {
+		return
+	}
+	p.writeOne(ctx, sessionID)
+}
+
+// writeOne stamps one session. A failing write is logged and swallowed: a
+// broken liveness path must not take prompt serving down.
+func (p *publisher) writeOne(ctx context.Context, sessionID string) {
+	if err := p.writer.Write(ctx, sessionID); err != nil {
+		glog.Warningf("cluster heartbeat write failed session=%s: %v", sessionID, err)
 	}
 }

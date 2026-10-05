@@ -1,7 +1,13 @@
 ---
-status: draft
+status: completed
 spec: [001-cluster-worker-heartbeat]
+summary: ActivityRecorder now notifies the publisher of each served session so the publisher stamps it immediately (non-blocking send, outside the mutex), with the 20s ticker unchanged and refreshOne gated on the idle cutoff; tests, README and CHANGELOG updated.
+execution_id: agent-claude-cluster-heartbeat-exec-006-spec-001-stamp-immediately-on-record
+dark-factory-version: v0.196.0
 created: "2026-10-05T20:30:00Z"
+queued: "2026-10-05T20:35:46Z"
+started: "2026-10-05T20:36:21Z"
+completed: "2026-10-05T20:41:28Z"
 ---
 
 <!--

@@ -70,4 +70,19 @@ var _ = Describe("ActivityRecorder", func() {
 		Expect(heartbeat.IdleCutoff).To(Equal(90 * time.Second))
 		Expect(heartbeat.RefreshInterval).To(BeNumerically("<", 60*time.Second))
 	})
+
+	It("drops notifications rather than blocking when nothing drains the channel", func() {
+		// No receiver runs, so the buffer fills and the remaining sends must be
+		// dropped. A blocking send would hang this goroutine and the assertion
+		// below would fail on the closed channel rather than stalling the suite.
+		filled := make(chan struct{})
+		go func() {
+			defer close(filled)
+			for i := 0; i < 200; i++ {
+				recorder.Record(ctx, "abc")
+			}
+		}()
+		Eventually(filled).Should(BeClosed())
+		Expect(recorder.Active(ctx, heartbeat.IdleCutoff)).To(ContainElement("abc"))
+	})
 })
