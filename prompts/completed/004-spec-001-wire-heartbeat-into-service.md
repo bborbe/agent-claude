@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [001-cluster-worker-heartbeat]
+summary: Wired the cluster heartbeat into runService — the observing session factory, in-cluster clientset, pod-namespace reader and publisher now run alongside the interactive service via run.CancelOnFirstFinish, degrading to plain serving when the cluster API or namespace is unavailable
+execution_id: agent-claude-cluster-heartbeat-exec-004-spec-001-wire-heartbeat-into-service
+dark-factory-version: v0.196.0
 created: "2026-10-05T16:22:00Z"
 queued: "2026-10-05T16:51:20Z"
+started: "2026-10-05T16:57:17Z"
+completed: "2026-10-05T17:03:51Z"
 branch: dark-factory/cluster-worker-heartbeat
 ---
 

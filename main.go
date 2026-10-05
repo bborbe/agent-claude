@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"os"
+	"strings"
 	"time"
 
 	agentlib "github.com/bborbe/agent"
@@ -28,7 +29,9 @@ import (
 	libmetrics "github.com/bborbe/agent/metrics"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
+	"github.com/bborbe/k8s"
 	libkafka "github.com/bborbe/kafka"
+	"github.com/bborbe/run"
 	libsentry "github.com/bborbe/sentry"
 	"github.com/bborbe/service"
 	libtime "github.com/bborbe/time"
@@ -38,6 +41,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 
 	"github.com/bborbe/agent-claude/pkg/factory"
+	heartbeat "github.com/bborbe/agent-claude/pkg/heartbeat"
 )
 
 // agentName is the identity string used for Prometheus metric grouping and logging.
@@ -252,20 +256,92 @@ func (a *application) runService(
 	// a turn that pauses on a permission request is visible on the service's own
 	// /permission route and answerable from outside the pod.
 	permissions := interactive.NewPermissionRegistry()
-	sessions := factory.CreateClaudeSessionFactory(
-		a.ClaudeConfigDir,
-		a.AgentDir,
-		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
-		a.AnthropicModel,
-		claudeEnv,
-		permissions,
+
+	// The clock is created once here and shared by the activity recorder and the
+	// heartbeat writer, so a session's activity and its entry's stamp come from the
+	// same source of time.
+	currentDateTime := libtime.NewCurrentDateTime()
+	recorder := heartbeat.NewActivityRecorder(currentDateTime)
+	// The observer wraps the Session the factory returns, not the factory's Create:
+	// the library calls Create once per session and never again, so only Prompt can
+	// report that a session is still being served.
+	sessions := heartbeat.NewObservingSessionFactory(
+		factory.CreateClaudeSessionFactory(
+			a.ClaudeConfigDir,
+			a.AgentDir,
+			claudelib.ParseAllowedTools(a.AllowedToolsRaw),
+			a.AnthropicModel,
+			claudeEnv,
+			permissions,
+		),
+		recorder,
 	)
-	return interactive.NewServiceWithPermissions(
+	interactiveService := interactive.NewServiceWithPermissions(
 		sessions,
 		a.Listen,
 		a.ProviderBaseURL,
 		registry,
 		interactive.NewAuthToken(a.InteractiveAuthToken),
 		permissions,
-	).Run(ctx)
+	)
+
+	clientset, err := k8s.CreateClientset("")
+	if err != nil {
+		// A broken liveness path must not take prompt serving down: the worker goes
+		// unlisted rather than unserved. The next pod start retries the setup.
+		glog.Warningf("cluster heartbeat disabled: %v", err)
+		return interactiveService.Run(ctx)
+	}
+	publisher, err := buildHeartbeatPublisher(ctx, clientset, recorder, currentDateTime)
+	if err != nil {
+		// Same rule as above: the heartbeat is best-effort, prompt serving is not.
+		glog.Warningf("cluster heartbeat disabled: %v", err)
+		return interactiveService.Run(ctx)
+	}
+	return run.CancelOnFirstFinish(ctx, publisher.Run, interactiveService.Run)
+}
+
+// buildHeartbeatPublisher builds the cluster heartbeat publisher from the
+// in-cluster client. An error means the pod cannot resolve the cluster API or its
+// own namespace; the caller treats that as "run without a heartbeat" rather than as
+// a startup failure, because the liveness path is best-effort and prompt serving is
+// not.
+func buildHeartbeatPublisher(
+	ctx context.Context,
+	clientset k8s.Interface,
+	recorder heartbeat.ActivityRecorder,
+	currentDateTime libtime.CurrentDateTimeGetter,
+) (heartbeat.Publisher, error) {
+	namespace, err := inClusterNamespace(ctx, inClusterNamespacePath)
+	if err != nil {
+		return nil, errors.Wrap(ctx, err, "resolve pod namespace")
+	}
+	writer := heartbeat.NewConfigMapWriter(
+		k8s.NewConfigMapDeployer(clientset),
+		namespace,
+		heartbeat.ConfigMapName,
+		currentDateTime,
+	)
+	return heartbeat.NewPublisher(recorder, writer, heartbeat.RefreshInterval), nil
+}
+
+// inClusterNamespacePath is where the kubelet mounts the pod's own namespace — the
+// same service-account mount k8s_rest.InClusterConfig reads from. It is a var
+// rather than a const so a spec can point the reader at a temp file; production
+// never reassigns it.
+var inClusterNamespacePath = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
+// inClusterNamespace reads the pod's own namespace from the file the kubelet mounts
+// at the standard service-account path. The heartbeat writer publishes into the
+// namespace the pod runs in — the same namespace the reader reads.
+func inClusterNamespace(ctx context.Context, path string) (k8s.Namespace, error) {
+	content, err := os.ReadFile(path) // #nosec G304 -- path is a package constant
+	if err != nil {
+		return "", errors.Wrap(ctx, err, "read pod namespace")
+	}
+	namespace := strings.TrimSpace(string(content))
+	if namespace == "" {
+		return "", errors.Errorf(ctx, "pod namespace is empty in %s", path)
+	}
+	return k8s.Namespace(namespace), nil
 }

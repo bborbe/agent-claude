@@ -13,6 +13,7 @@ require (
 	github.com/bborbe/errors v1.6.1
 	github.com/bborbe/k8s v1.14.19
 	github.com/bborbe/kafka v1.25.16
+	github.com/bborbe/run v1.10.2
 	github.com/bborbe/sentry v1.10.1
 	github.com/bborbe/service v1.10.13
 	github.com/bborbe/time v1.27.14
@@ -35,7 +36,6 @@ require (
 	github.com/bborbe/math v1.4.8 // indirect
 	github.com/bborbe/metrics v0.6.3 // indirect
 	github.com/bborbe/parse v1.11.4 // indirect
-	github.com/bborbe/run v1.10.2 // indirect
 	github.com/bborbe/strimzi v1.8.17 // indirect
 	github.com/bborbe/validation v1.5.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

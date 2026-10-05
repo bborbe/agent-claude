@@ -25,6 +25,18 @@ stamps `AGENT_TYPE=service` from the Config's `spec.type`; a service agent needs
 route except readiness and metrics requires `Authorization: Bearer <token>`, and a service pod with
 no `INTERACTIVE_AUTH_TOKEN` fails to start.
 
+### Cluster heartbeat
+
+A service agent publishes its own liveness so the fleet's cluster liveness reader can see it. Every
+20 seconds it stamps one entry per session it has served within the last 90 seconds into the
+`claude-worker-heartbeats` ConfigMap, in the namespace the pod runs in. The key is the session id
+(the `X-Session-Id` the caller supplies); the value is `{"refreshedAt": "<RFC3339>"}`. The reader
+(`scripts/cluster-heartbeat.py` in `bborbe/claude-supervisor`) treats a stamp older than 60 seconds
+as dead, so a worker that stops being addressed ages out on its own with nothing to clean up. The
+write merges into the ConfigMap's existing data, so two pods cannot erase each other's entries. A
+failing write is logged and does not stop the service serving prompts. The pod needs RBAC to write
+the ConfigMap — granted in the config repo, not here.
+
 ## Env Vars
 
 | Var | Required | Default | Purpose |

@@ -11,12 +11,18 @@ import (
 	"context"
 	"flag"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/bborbe/argument/v2"
+	"github.com/bborbe/k8s"
+	k8smocks "github.com/bborbe/k8s/mocks"
+	libtime "github.com/bborbe/time"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/bborbe/agent-claude/pkg/heartbeat"
 )
 
 var _ = Describe("application argument parsing", func() {
@@ -111,6 +117,12 @@ var _ = Describe("application.runService", func() {
 	// addressed. Run blocks until the context is cancelled and then returns nil,
 	// which is what makes returning it directly from Run correct. Listen is port 0
 	// so the spec never contends for the :9090 the executor's probe targets.
+	//
+	// With the heartbeat wiring this also exercises the degrade path: the test
+	// process has no in-cluster service-account mount, so k8s.CreateClientset("")
+	// fails at the call site and buildHeartbeatPublisher is never reached.
+	// runService logs and serves anyway, and this spec passing is the evidence
+	// that a broken liveness path does not stop prompt serving.
 	It("serves until the context is cancelled, then returns nil", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -135,5 +147,76 @@ var _ = Describe("application.runService", func() {
 		app := &application{Listen: "127.0.0.1:0"}
 		err := app.runService(context.Background(), prometheus.NewRegistry(), map[string]string{})
 		Expect(err).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("inClusterNamespace", func() {
+	It("reads the namespace and trims the trailing newline", func() {
+		path := filepath.Join(GinkgoT().TempDir(), "namespace")
+		Expect(os.WriteFile(path, []byte("dev\n"), 0600)).To(Succeed())
+
+		namespace, err := inClusterNamespace(context.Background(), path)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(namespace).To(Equal(k8s.Namespace("dev")))
+	})
+
+	It("returns an error when the file is absent", func() {
+		path := filepath.Join(GinkgoT().TempDir(), "missing")
+
+		_, err := inClusterNamespace(context.Background(), path)
+
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("returns an error when the file holds only whitespace", func() {
+		path := filepath.Join(GinkgoT().TempDir(), "namespace")
+		Expect(os.WriteFile(path, []byte("  \n"), 0600)).To(Succeed())
+
+		_, err := inClusterNamespace(context.Background(), path)
+
+		Expect(err).To(HaveOccurred())
+	})
+})
+
+// buildHeartbeatPublisher takes the clientset as a parameter so these specs can
+// exercise both of its paths. The only runService spec takes the degrade branch
+// (no in-cluster mount), so without these the helper would be untested.
+var _ = Describe("buildHeartbeatPublisher", func() {
+	// inClusterNamespacePath is a package-level seam: the helper reads the constant
+	// path, so each spec points it at a temp file for the duration of the spec and
+	// restores the original afterwards.
+	It("builds a publisher when the pod namespace resolves", func() {
+		path := filepath.Join(GinkgoT().TempDir(), "namespace")
+		Expect(os.WriteFile(path, []byte("dev\n"), 0600)).To(Succeed())
+		original := inClusterNamespacePath
+		inClusterNamespacePath = path
+		DeferCleanup(func() { inClusterNamespacePath = original })
+
+		publisher, err := buildHeartbeatPublisher(
+			context.Background(),
+			&k8smocks.K8sInterface{},
+			heartbeat.NewActivityRecorder(libtime.NewCurrentDateTime()),
+			libtime.NewCurrentDateTime(),
+		)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(publisher).NotTo(BeNil())
+	})
+
+	It("returns an error when the pod namespace cannot be resolved", func() {
+		original := inClusterNamespacePath
+		inClusterNamespacePath = filepath.Join(GinkgoT().TempDir(), "missing")
+		DeferCleanup(func() { inClusterNamespacePath = original })
+
+		publisher, err := buildHeartbeatPublisher(
+			context.Background(),
+			&k8smocks.K8sInterface{},
+			heartbeat.NewActivityRecorder(libtime.NewCurrentDateTime()),
+			libtime.NewCurrentDateTime(),
+		)
+
+		Expect(err).To(HaveOccurred())
+		Expect(publisher).To(BeNil())
 	})
 })
