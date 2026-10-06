@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: bump `github.com/bborbe/agent` to v0.96.0 and wire the A2A public address — a service agent now serves the A2A Agent Card at `/.well-known/agent-card.json` and the A2A JSON-RPC endpoint at `/a2a`, and it refuses to start without `A2A_PUBLIC_URL` rather than advertising an empty or container-local endpoint; the address is bound through the `application` argument struct (not read from the environment ad hoc) and is passed to `interactive.NewServiceWithPermissions` as the advertised public URL, never derived from `LISTEN`; the task-routed job path is unchanged and does not need the address
+
 ## v0.7.0
 
 - feat: a service agent publishes its own cluster liveness — every 20 seconds it stamps one entry per session it has served within the last 90 seconds into the `claude-worker-heartbeats` ConfigMap (key: the session id, value: `{"refreshedAt": "<RFC3339>"}`), so the cluster liveness reader in `bborbe/claude-supervisor` returns a live cluster worker while it is served and stops returning it within 60 seconds of its last refresh, and a session's first entry is stamped the moment it is served; the write merges into the ConfigMap's existing data, a failing write is logged without taking prompt serving down, and the pod's own namespace is resolved from the service-account mount rather than configured

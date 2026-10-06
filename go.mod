@@ -7,7 +7,7 @@ tool (
 )
 
 require (
-	github.com/bborbe/agent v0.94.0
+	github.com/bborbe/agent v0.96.0
 	github.com/bborbe/argument/v2 v2.13.2
 	github.com/bborbe/cqrs v0.6.10
 	github.com/bborbe/errors v1.6.1
@@ -29,6 +29,7 @@ require (
 require (
 	github.com/IBM/sarama v1.60.2 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
+	github.com/a2aproject/a2a-go/v2 v2.6.0 // indirect
 	github.com/bborbe/collection v1.20.26 // indirect
 	github.com/bborbe/http v1.26.26 // indirect
 	github.com/bborbe/kv v1.21.14 // indirect

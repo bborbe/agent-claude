@@ -116,6 +116,13 @@ type application struct {
 	// authenticate must fail to start rather than serve unauthenticated.
 	InteractiveAuthToken string `required:"false" arg:"interactive-auth-token" env:"INTERACTIVE_AUTH_TOKEN" usage:"Bearer token required by the interactive service's gated routes" display:"length"`
 
+	// A2APublicURL is the externally reachable address of the interactive service's A2A
+	// endpoint, advertised verbatim in its Agent Card. It is configuration, never derived from
+	// Listen, so the card cannot advertise the listen address. Required for a service agent;
+	// enforced in runService rather than by a required tag, for the same reason as
+	// InteractiveAuthToken.
+	A2APublicURL string `required:"false" arg:"a2a-public-url" env:"A2A_PUBLIC_URL" usage:"Externally reachable A2A endpoint URL the Agent Card advertises (service agents only)"`
+
 	// Kafka delivery (optional — only active when TASK_ID is set). TaskID is a
 	// plain string rather than agentlib.TaskIdentifier so a service agent, which
 	// has no task id, is not rejected by that type's Validate method at parse time.
@@ -248,8 +255,15 @@ func (a *application) runService(
 			"INTERACTIVE_AUTH_TOKEN is required for a service agent; a service that cannot authenticate must not serve unauthenticated",
 		)
 	}
+	if a.A2APublicURL == "" {
+		return errors.Errorf(
+			ctx,
+			"A2A_PUBLIC_URL is required for a service agent; the Agent Card must advertise a real network endpoint",
+		)
+	}
 	glog.V(2).Infof(
-		"agent-claude service mode: serving readiness, metrics, prompt intake and the permission endpoint on %s",
+		"agent-claude service mode: serving readiness, metrics, prompt intake, the permission endpoint and the A2A Agent Card (/.well-known/agent-card.json, endpoint %s) on %s",
+		a.A2APublicURL,
 		a.Listen,
 	)
 	// One registry, passed to the session factory and to the service together, so
@@ -276,14 +290,7 @@ func (a *application) runService(
 		),
 		recorder,
 	)
-	interactiveService := interactive.NewServiceWithPermissions(
-		sessions,
-		a.Listen,
-		a.ProviderBaseURL,
-		registry,
-		interactive.NewAuthToken(a.InteractiveAuthToken),
-		permissions,
-	)
+	interactiveService := a.newInteractiveService(sessions, registry, permissions)
 
 	clientset, err := k8s.CreateClientset("")
 	if err != nil {
@@ -299,6 +306,25 @@ func (a *application) runService(
 		return interactiveService.Run(ctx)
 	}
 	return run.CancelOnFirstFinish(ctx, publisher.Run, interactiveService.Run)
+}
+
+// newInteractiveService builds the interactive HTTP surface from the application's
+// configuration. The three address settings are all strings, so their order is checked
+// by a spec that serves the Agent Card rather than by the compiler.
+func (a *application) newInteractiveService(
+	sessions agentlib.SessionFactory,
+	registry *prometheus.Registry,
+	permissions interactive.PermissionRegistry,
+) interactive.Service {
+	return interactive.NewServiceWithPermissions(
+		sessions,
+		a.Listen,
+		a.ProviderBaseURL,
+		registry,
+		interactive.NewAuthToken(a.InteractiveAuthToken),
+		a.A2APublicURL,
+		permissions,
+	)
 }
 
 // buildHeartbeatPublisher builds the cluster heartbeat publisher from the

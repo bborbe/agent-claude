@@ -10,10 +10,14 @@ package main
 import (
 	"context"
 	"flag"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"time"
 
+	interactive "github.com/bborbe/agent/interactive"
+	agentmocks "github.com/bborbe/agent/mocks"
 	"github.com/bborbe/argument/v2"
 	"github.com/bborbe/k8s"
 	k8smocks "github.com/bborbe/k8s/mocks"
@@ -80,6 +84,14 @@ var _ = Describe("application argument parsing", func() {
 		Expect(argument.Parse(ctx, app)).To(Succeed())
 		Expect(app.InteractiveAuthToken).To(Equal("test-token"))
 	})
+
+	It("binds A2A_PUBLIC_URL into the struct field", func() {
+		Expect(os.Setenv("A2A_PUBLIC_URL", "https://agent.example.test/a2a")).To(Succeed())
+		DeferCleanup(func() { _ = os.Unsetenv("A2A_PUBLIC_URL") })
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.A2APublicURL).To(Equal("https://agent.example.test/a2a"))
+	})
 })
 
 var _ = Describe("application.buildClaudeEnv", func() {
@@ -127,7 +139,11 @@ var _ = Describe("application.runService", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		app := &application{Listen: "127.0.0.1:0", InteractiveAuthToken: "test-token"}
+		app := &application{
+			Listen:               "127.0.0.1:0",
+			InteractiveAuthToken: "test-token",
+			A2APublicURL:         "https://agent.example.test/a2a",
+		}
 		done := make(chan error, 1)
 		go func() {
 			done <- app.runService(ctx, prometheus.NewRegistry(), map[string]string{})
@@ -146,7 +162,55 @@ var _ = Describe("application.runService", func() {
 	It("fails to start when no interactive auth token is configured", func() {
 		app := &application{Listen: "127.0.0.1:0"}
 		err := app.runService(context.Background(), prometheus.NewRegistry(), map[string]string{})
-		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(ContainSubstring("INTERACTIVE_AUTH_TOKEN")))
+	})
+
+	// The guard is exercised in a goroutine on purpose: if the check were missing, the
+	// synchronous call would start serving and block until the suite timeout instead of
+	// failing fast, so the failure mode would be a hang rather than a clear assertion.
+	It("fails to start when no A2A public URL is configured", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+
+		app := &application{Listen: "127.0.0.1:0", InteractiveAuthToken: "test-token"}
+		done := make(chan error, 1)
+		go func() {
+			done <- app.runService(ctx, prometheus.NewRegistry(), map[string]string{})
+		}()
+
+		Eventually(
+			done,
+			5*time.Second,
+		).Should(Receive(MatchError(ContainSubstring("A2A_PUBLIC_URL"))))
+	})
+})
+
+// The three address settings passed to the interactive service — Listen, ProviderBaseURL
+// and A2APublicURL — are all strings, so a misordered constructor call compiles and passes
+// any struct-equality check. This spec serves the real Agent Card route and asserts the
+// advertised URL, which is the only check that tells the two orders apart.
+var _ = Describe("application.newInteractiveService", func() {
+	It("advertises the configured A2A public URL in the Agent Card", func() {
+		app := &application{
+			Listen:               "127.0.0.1:0",
+			ProviderBaseURL:      "http://provider.example.test",
+			InteractiveAuthToken: "test-token",
+			A2APublicURL:         "https://agent.example.test/a2a",
+		}
+		service := app.newInteractiveService(
+			&agentmocks.SessionFactory{},
+			prometheus.NewRegistry(),
+			interactive.NewPermissionRegistry(),
+		)
+
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/.well-known/agent-card.json", nil)
+		service.Handler().ServeHTTP(recorder, request)
+
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		Expect(recorder.Body.String()).To(ContainSubstring("https://agent.example.test/a2a"))
+		Expect(recorder.Body.String()).NotTo(ContainSubstring("provider.example.test"))
+		Expect(recorder.Body.String()).NotTo(ContainSubstring("127.0.0.1"))
 	})
 })
 
