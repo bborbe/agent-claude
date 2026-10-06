@@ -18,13 +18,13 @@ import (
 
 	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
-	"github.com/bborbe/agent/envparse"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libsentry "github.com/bborbe/sentry"
 	"github.com/bborbe/service"
 	"github.com/bborbe/vault-cli/pkg/domain"
 
+	"github.com/bborbe/agent-claude/pkg/envbag"
 	"github.com/bborbe/agent-claude/pkg/factory"
 )
 
@@ -47,12 +47,12 @@ type application struct {
 	AllowedToolsRaw string `required:"false" arg:"allowed-tools" env:"ALLOWED_TOOLS" usage:"Comma-separated list of allowed tools"`
 
 	// Environment context passed to prompt (comma-separated KEY=VALUE pairs)
-	EnvContextRaw string `required:"false" arg:"env-context" env:"ENV_CONTEXT" usage:"Comma-separated KEY=VALUE pairs for prompt context"`
+	EnvContextRaw envbag.KeyValueList `required:"false" arg:"env-context" env:"ENV_CONTEXT" usage:"Comma-separated KEY=VALUE pairs for prompt context"`
 
 	// Environment variables passed to Claude CLI process (comma-separated KEY=VALUE pairs).
 	// Use this for ad-hoc / less-common env vars. The three load-bearing Anthropic provider
 	// vars below have dedicated arg slots so they don't have to be packed into this string.
-	ClaudeEnvRaw string `required:"false" arg:"claude-env" env:"CLAUDE_ENV" usage:"Comma-separated KEY=VALUE pairs for Claude CLI environment"`
+	ClaudeEnvRaw envbag.KeyValueList `required:"false" arg:"claude-env" env:"CLAUDE_ENV" usage:"Comma-separated KEY=VALUE pairs for Claude CLI environment"`
 
 	// Anthropic-compatible provider routing. Setting AnthropicBaseURL + AnthropicAuthToken
 	// routes the claude CLI to an alt-provider (e.g. MiniMax via https://api.minimax.io/anthropic).
@@ -82,7 +82,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 
 	deliverer := factory.CreateFileResultDeliverer(a.TaskFilePath)
 
-	claudeEnv := envparse.KeyValuePairs(a.ClaudeEnvRaw)
+	claudeEnv := a.ClaudeEnvRaw.Pairs()
 	if claudeEnv == nil {
 		claudeEnv = map[string]string{}
 	}
@@ -102,7 +102,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 		a.AnthropicModel,
 		claudeEnv,
-		envparse.KeyValuePairs(a.EnvContextRaw),
+		a.EnvContextRaw.Pairs(),
 	)
 
 	result, err := agent.Run(ctx, a.Phase, string(taskContent), deliverer)
