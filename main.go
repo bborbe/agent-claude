@@ -24,7 +24,6 @@ import (
 	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
 	delivery "github.com/bborbe/agent/delivery"
-	"github.com/bborbe/agent/envparse"
 	interactive "github.com/bborbe/agent/interactive"
 	libmetrics "github.com/bborbe/agent/metrics"
 	"github.com/bborbe/cqrs/base"
@@ -40,6 +39,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 
+	"github.com/bborbe/agent-claude/pkg/envbag"
 	"github.com/bborbe/agent-claude/pkg/factory"
 	heartbeat "github.com/bborbe/agent-claude/pkg/heartbeat"
 )
@@ -71,12 +71,12 @@ type application struct {
 	TaskContent string `required:"false" arg:"task-content" env:"TASK_CONTENT" usage:"Raw task markdown from vault; required unless AGENT_TYPE=service"`
 
 	// Environment context passed to prompt (comma-separated KEY=VALUE pairs)
-	EnvContextRaw string `required:"false" arg:"env-context" env:"ENV_CONTEXT" usage:"Comma-separated KEY=VALUE pairs for prompt context"`
+	EnvContextRaw envbag.KeyValueList `required:"false" arg:"env-context" env:"ENV_CONTEXT" usage:"Comma-separated KEY=VALUE pairs for prompt context"`
 
 	// Environment variables passed to Claude CLI process (comma-separated KEY=VALUE pairs).
 	// Use this for ad-hoc / less-common env vars. The three load-bearing Anthropic provider
 	// vars below have dedicated arg slots so they don't have to be packed into this string.
-	ClaudeEnvRaw string `required:"false" arg:"claude-env" env:"CLAUDE_ENV" usage:"Comma-separated KEY=VALUE pairs for Claude CLI environment"`
+	ClaudeEnvRaw envbag.KeyValueList `required:"false" arg:"claude-env" env:"CLAUDE_ENV" usage:"Comma-separated KEY=VALUE pairs for Claude CLI environment"`
 
 	// Anthropic-compatible provider routing. Setting AnthropicBaseURL + AnthropicAuthToken
 	// routes the claude CLI to an alt-provider (e.g. MiniMax via https://api.minimax.io/anthropic).
@@ -201,7 +201,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 		a.AnthropicModel,
 		claudeEnv,
-		envparse.KeyValuePairs(a.EnvContextRaw),
+		a.EnvContextRaw.Pairs(),
 	)
 	agent, err := provider.Get(ctx, agentlib.TaskType(a.TaskType))
 	if err != nil {
@@ -226,7 +226,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 // vars overriding the same keys. Both agent shapes use it — the one-shot runner
 // and the long-lived session take the same config.
 func (a *application) buildClaudeEnv() map[string]string {
-	claudeEnv := envparse.KeyValuePairs(a.ClaudeEnvRaw)
+	claudeEnv := a.ClaudeEnvRaw.Pairs()
 	if claudeEnv == nil {
 		claudeEnv = map[string]string{}
 	}

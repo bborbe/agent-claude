@@ -104,6 +104,25 @@ var _ = Describe("application argument parsing", func() {
 		Expect(argument.Parse(ctx, app)).To(Succeed())
 		Expect(app.A2AAgentName).To(Equal("test-agent-name"))
 	})
+
+	// The whole key-names-only fix rests on the argument parser filling a named
+	// string type from the env var unchanged. A struct-field assertion would not
+	// prove that, so this parses the real env var and reads the pairs back.
+	It("binds CLAUDE_ENV into the struct field as parsed pairs", func() {
+		Expect(os.Setenv("CLAUDE_ENV", "A=1,B=2")).To(Succeed())
+		DeferCleanup(func() { _ = os.Unsetenv("CLAUDE_ENV") })
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.ClaudeEnvRaw.Pairs()).To(Equal(map[string]string{"A": "1", "B": "2"}))
+	})
+
+	It("binds ENV_CONTEXT into the struct field as parsed pairs", func() {
+		Expect(os.Setenv("ENV_CONTEXT", "A=1,B=2")).To(Succeed())
+		DeferCleanup(func() { _ = os.Unsetenv("ENV_CONTEXT") })
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.EnvContextRaw.Pairs()).To(Equal(map[string]string{"A": "1", "B": "2"}))
+	})
 })
 
 // The startup configuration log is written by a library
@@ -129,6 +148,33 @@ var _ = Describe("application startup argument log", func() {
 			fmt.Sprintf("AnthropicAuthToken length %d", len(sentinel)),
 		))
 		Expect(output).NotTo(ContainSubstring(sentinel))
+	})
+
+	// Either bag can carry a credential: buildClaudeEnv sources
+	// ANTHROPIC_AUTH_TOKEN from CLAUDE_ENV when its dedicated field is empty.
+	// The second bag deliberately uses a key name no marker heuristic would
+	// flag, so this spec distinguishes key-names-only from a
+	// marker-based redaction that would leave an innocuously named secret in
+	// the log.
+	It("renders the CLAUDE_ENV and ENV_CONTEXT bags as key names only, never their values", func() {
+		const claudeEnvSentinel = "sentinel-claude-env-2c71"
+		const envContextSentinel = "sentinel-env-context-9b04"
+
+		var buffer bytes.Buffer
+		log.SetOutput(&buffer)
+		DeferCleanup(func() { log.SetOutput(os.Stderr) })
+
+		app := &application{
+			ClaudeEnvRaw:  "ANTHROPIC_AUTH_TOKEN=" + claudeEnvSentinel + ",FOO=bar",
+			EnvContextRaw: "INNOCUOUS_NAME=" + envContextSentinel,
+		}
+		Expect(argument.Print(context.Background(), app)).To(Succeed())
+
+		output := buffer.String()
+		Expect(output).To(ContainSubstring("Argument: ClaudeEnvRaw 'ANTHROPIC_AUTH_TOKEN,FOO'"))
+		Expect(output).To(ContainSubstring("Argument: EnvContextRaw 'INNOCUOUS_NAME'"))
+		Expect(output).NotTo(ContainSubstring(claudeEnvSentinel))
+		Expect(output).NotTo(ContainSubstring(envContextSentinel))
 	})
 })
 

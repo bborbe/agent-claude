@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: the `CLAUDE_ENV` and `ENV_CONTEXT` bags are no longer printed with their values by the startup configuration log — either can carry a credential (`ANTHROPIC_AUTH_TOKEN` is read from `CLAUDE_ENV` when the dedicated field is empty), and both were logged verbatim; each now renders as its sorted key names only, so the log still shows which variables a pod received
+
 ## v0.9.2
 
 - fix: bump `github.com/bborbe/agent` to v0.97.1 — the interactive HTTP service now builds its server with a ten-minute `libhttp.ServerOptions.WriteTimeout` instead of the thirty-second `github.com/bborbe/http` default, so a turn that outlives thirty seconds can still write its answer instead of losing it to a write deadline that expired while the handler was still running (observed as `502 Bad Gateway`)
