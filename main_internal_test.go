@@ -8,9 +8,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -100,6 +103,32 @@ var _ = Describe("application argument parsing", func() {
 		app := &application{}
 		Expect(argument.Parse(ctx, app)).To(Succeed())
 		Expect(app.A2AAgentName).To(Equal("test-agent-name"))
+	})
+})
+
+// The startup configuration log is written by a library
+// (github.com/bborbe/argument/v2), which honours only display:"hidden" and
+// display:"length" — every other display value falls through to the branch that
+// logs the field verbatim. A struct-tag assertion would prove only that a string
+// was typed, not that the library redacts it, so this spec captures what the
+// printer actually writes.
+var _ = Describe("application startup argument log", func() {
+	It("reports the Anthropic auth token as a length, never its value", func() {
+		const sentinel = "sentinel-anthropic-auth-token-8f3a"
+
+		var buffer bytes.Buffer
+		log.SetOutput(&buffer)
+		DeferCleanup(func() { log.SetOutput(os.Stderr) })
+
+		app := &application{AnthropicAuthToken: sentinel}
+		Expect(argument.Print(context.Background(), app)).To(Succeed())
+
+		output := buffer.String()
+		Expect(output).To(ContainSubstring("AnthropicAuthToken"))
+		Expect(output).To(ContainSubstring(
+			fmt.Sprintf("AnthropicAuthToken length %d", len(sentinel)),
+		))
+		Expect(output).NotTo(ContainSubstring(sentinel))
 	})
 })
 
