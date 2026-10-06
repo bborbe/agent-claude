@@ -17,13 +17,16 @@ New agents are created by swapping instructions (agent `.claude/CLAUDE.md`) and 
 ### Service mode
 
 With `AGENT_TYPE=service` the binary takes a second shape: instead of running one task and
-exiting, it serves readiness, metrics and prompt intake on `LISTEN` (default `:9090`) and holds
-one conversation per session id across requests. The HTTP surface comes entirely from the shared
-`github.com/bborbe/agent/interactive` library — this repo adds no routing of its own. The executor
-stamps `AGENT_TYPE=service` from the Config's `spec.type`; a service agent needs neither
-`TASK_CONTENT` nor `TASK_ID`, and `PROVIDER_BASE_URL` is dialled for the readiness check. Every
-route except readiness and metrics requires `Authorization: Bearer <token>`, and a service pod with
-no `INTERACTIVE_AUTH_TOKEN` fails to start.
+exiting, it serves readiness, metrics, prompt intake, the permission endpoint, the A2A Agent Card
+at `/.well-known/agent-card.json` and the A2A JSON-RPC endpoint at `/a2a` on `LISTEN` (default
+`:9090`), holding one conversation per session id across requests. The HTTP surface comes entirely
+from the shared `github.com/bborbe/agent/interactive` library — this repo adds no routing of its
+own. The executor stamps `AGENT_TYPE=service` from the Config's `spec.type`; a service agent needs
+neither `TASK_CONTENT` nor `TASK_ID`, and `PROVIDER_BASE_URL` is dialled for the readiness check.
+`A2A_PUBLIC_URL` supplies the externally reachable address the Agent Card advertises — it is
+configuration, never derived from `LISTEN`, so the card cannot advertise the listen address. Every
+route except readiness, metrics and the Agent Card requires `Authorization: Bearer <token>`, and a
+service pod with no `INTERACTIVE_AUTH_TOKEN` or no `A2A_PUBLIC_URL` fails to start.
 
 ### Cluster heartbeat
 
@@ -45,6 +48,7 @@ the ConfigMap — granted in the config repo, not here.
 |---|---|---|---|
 | `TASK_CONTENT` | yes (unless `AGENT_TYPE=service`) | — | Raw task markdown |
 | `INTERACTIVE_AUTH_TOKEN` | yes (when `AGENT_TYPE=service`) | — | Bearer token the interactive service requires on its gated routes; redacted from the startup log |
+| `A2A_PUBLIC_URL` | yes (when `AGENT_TYPE=service`) | — | Externally reachable A2A endpoint URL the Agent Card advertises; never derived from `LISTEN` |
 | `AGENT_TYPE` | no | — | `service` for a long-running identity agent; empty for a task-routed one |
 | `LISTEN` | no | `:9090` | Readiness/metrics address (service agents only) |
 | `PROVIDER_BASE_URL` | no | — | Provider endpoint a service agent dials for readiness |
