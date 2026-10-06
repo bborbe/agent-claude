@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"net/http"
 	"net/http/httptest"
@@ -92,6 +93,14 @@ var _ = Describe("application argument parsing", func() {
 		Expect(argument.Parse(ctx, app)).To(Succeed())
 		Expect(app.A2APublicURL).To(Equal("https://agent.example.test/a2a"))
 	})
+
+	It("binds A2A_AGENT_NAME into the struct field", func() {
+		Expect(os.Setenv("A2A_AGENT_NAME", "test-agent-name")).To(Succeed())
+		DeferCleanup(func() { _ = os.Unsetenv("A2A_AGENT_NAME") })
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.A2AAgentName).To(Equal("test-agent-name"))
+	})
 })
 
 var _ = Describe("application.buildClaudeEnv", func() {
@@ -143,6 +152,7 @@ var _ = Describe("application.runService", func() {
 			Listen:               "127.0.0.1:0",
 			InteractiveAuthToken: "test-token",
 			A2APublicURL:         "https://agent.example.test/a2a",
+			A2AAgentName:         "claude-interactive",
 		}
 		done := make(chan error, 1)
 		go func() {
@@ -172,7 +182,11 @@ var _ = Describe("application.runService", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 
-		app := &application{Listen: "127.0.0.1:0", InteractiveAuthToken: "test-token"}
+		app := &application{
+			Listen:               "127.0.0.1:0",
+			InteractiveAuthToken: "test-token",
+			A2AAgentName:         "claude-interactive",
+		}
 		done := make(chan error, 1)
 		go func() {
 			done <- app.runService(ctx, prometheus.NewRegistry(), map[string]string{})
@@ -183,12 +197,34 @@ var _ = Describe("application.runService", func() {
 			5*time.Second,
 		).Should(Receive(MatchError(ContainSubstring("A2A_PUBLIC_URL"))))
 	})
+
+	// Same goroutine shape as the missing-URL spec, for the same reason: without the
+	// guard the synchronous call would serve and block until the suite timeout.
+	It("fails to start when no A2A agent name is configured", func() {
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+
+		app := &application{
+			Listen:               "127.0.0.1:0",
+			InteractiveAuthToken: "test-token",
+			A2APublicURL:         "https://agent.example.test/a2a",
+		}
+		done := make(chan error, 1)
+		go func() {
+			done <- app.runService(ctx, prometheus.NewRegistry(), map[string]string{})
+		}()
+
+		Eventually(
+			done,
+			5*time.Second,
+		).Should(Receive(MatchError(ContainSubstring("A2A_AGENT_NAME"))))
+	})
 })
 
-// The three address settings passed to the interactive service — Listen, ProviderBaseURL
-// and A2APublicURL — are all strings, so a misordered constructor call compiles and passes
-// any struct-equality check. This spec serves the real Agent Card route and asserts the
-// advertised URL, which is the only check that tells the two orders apart.
+// The public URL now travels inside interactive.CardConfig rather than as a positional
+// string argument, so this spec guards which application values fill the card's Name and
+// PublicURL fields (PublicURL from A2APublicURL, never from Listen). It serves the real
+// Agent Card route and asserts the advertised name and URL.
 var _ = Describe("application.newInteractiveService", func() {
 	It("advertises the configured A2A public URL in the Agent Card", func() {
 		app := &application{
@@ -196,6 +232,7 @@ var _ = Describe("application.newInteractiveService", func() {
 			ProviderBaseURL:      "http://provider.example.test",
 			InteractiveAuthToken: "test-token",
 			A2APublicURL:         "https://agent.example.test/a2a",
+			A2AAgentName:         "claude-interactive",
 		}
 		service := app.newInteractiveService(
 			&agentmocks.SessionFactory{},
@@ -211,6 +248,12 @@ var _ = Describe("application.newInteractiveService", func() {
 		Expect(recorder.Body.String()).To(ContainSubstring("https://agent.example.test/a2a"))
 		Expect(recorder.Body.String()).NotTo(ContainSubstring("provider.example.test"))
 		Expect(recorder.Body.String()).NotTo(ContainSubstring("127.0.0.1"))
+
+		var card struct {
+			Name string `json:"name"`
+		}
+		Expect(json.Unmarshal(recorder.Body.Bytes(), &card)).To(Succeed())
+		Expect(card.Name).To(Equal("claude-interactive"))
 	})
 })
 
