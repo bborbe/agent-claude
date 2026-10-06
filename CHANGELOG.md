@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.8.0
 
 - feat: bump `github.com/bborbe/agent` to v0.96.0 and wire the A2A public address — a service agent now serves the A2A Agent Card at `/.well-known/agent-card.json` and the A2A JSON-RPC endpoint at `/a2a`, and it refuses to start without `A2A_PUBLIC_URL` rather than advertising an empty or container-local endpoint; the address is bound through the `application` argument struct (not read from the environment ad hoc) and is passed to `interactive.NewServiceWithPermissions` as the advertised public URL, never derived from `LISTEN`; the task-routed job path is unchanged and does not need the address
 
