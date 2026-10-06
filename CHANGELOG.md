@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.9.1
 
 - fix: the Anthropic auth token is no longer printed in plaintext by the startup configuration log — `display:"password"` is not a value the argument printer honours, so the token fell through to the default branch and was logged verbatim; it now uses `display:"length"`, matching `INTERACTIVE_AUTH_TOKEN` and the Sentry fields
 
