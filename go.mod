@@ -7,7 +7,7 @@ tool (
 )
 
 require (
-	github.com/bborbe/agent v0.97.0
+	github.com/bborbe/agent v0.97.1
 	github.com/bborbe/argument/v2 v2.13.2
 	github.com/bborbe/cqrs v0.6.10
 	github.com/bborbe/errors v1.6.1

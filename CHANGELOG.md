@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: bump `github.com/bborbe/agent` to v0.97.1 — the interactive HTTP service now builds its server with a ten-minute `libhttp.ServerOptions.WriteTimeout` instead of the thirty-second `github.com/bborbe/http` default, so a turn that outlives thirty seconds can still write its answer instead of losing it to a write deadline that expired while the handler was still running (observed as `502 Bad Gateway`)
+
 ## v0.9.1
 
 - fix: the Anthropic auth token is no longer printed in plaintext by the startup configuration log — `display:"password"` is not a value the argument printer honours, so the token fell through to the default branch and was logged verbatim; it now uses `display:"length"`, matching `INTERACTIVE_AUTH_TOKEN` and the Sentry fields
