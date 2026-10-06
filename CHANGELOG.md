@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.9.3
 
 - fix: the `CLAUDE_ENV` and `ENV_CONTEXT` bags are no longer printed with their values by the startup configuration log — either can carry a credential (`ANTHROPIC_AUTH_TOKEN` is read from `CLAUDE_ENV` when the dedicated field is empty), and both were logged verbatim; each now renders as its sorted key names only, so the log still shows which variables a pod received
 
