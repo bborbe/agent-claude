@@ -123,6 +123,11 @@ type application struct {
 	// InteractiveAuthToken.
 	A2APublicURL string `required:"false" arg:"a2a-public-url" env:"A2A_PUBLIC_URL" usage:"Externally reachable A2A endpoint URL the Agent Card advertises (service agents only)"`
 
+	// A2AAgentName names this deployed agent in its A2A Agent Card. Required for a service
+	// agent; enforced in runService rather than by a required tag, for the same reason as
+	// A2APublicURL.
+	A2AAgentName string `required:"false" arg:"a2a-agent-name" env:"A2A_AGENT_NAME" usage:"Name the A2A Agent Card advertises for this agent (service agents only)"`
+
 	// Kafka delivery (optional — only active when TASK_ID is set). TaskID is a
 	// plain string rather than agentlib.TaskIdentifier so a service agent, which
 	// has no task id, is not rejected by that type's Validate method at parse time.
@@ -261,8 +266,15 @@ func (a *application) runService(
 			"A2A_PUBLIC_URL is required for a service agent; the Agent Card must advertise a real network endpoint",
 		)
 	}
+	if a.A2AAgentName == "" {
+		return errors.Errorf(
+			ctx,
+			"A2A_AGENT_NAME is required for a service agent; the Agent Card must name the deployed agent",
+		)
+	}
 	glog.V(2).Infof(
-		"agent-claude service mode: serving readiness, metrics, prompt intake, the permission endpoint and the A2A Agent Card (/.well-known/agent-card.json, endpoint %s) on %s",
+		"agent-claude service mode: serving readiness, metrics, prompt intake, the permission endpoint and the A2A Agent Card (/.well-known/agent-card.json, agent %s, endpoint %s) on %s",
+		a.A2AAgentName,
 		a.A2APublicURL,
 		a.Listen,
 	)
@@ -309,8 +321,9 @@ func (a *application) runService(
 }
 
 // newInteractiveService builds the interactive HTTP surface from the application's
-// configuration. The three address settings are all strings, so their order is checked
-// by a spec that serves the Agent Card rather than by the compiler.
+// configuration. The card's name and URL travel together in one struct, and which values
+// fill the card's Name and PublicURL fields is checked by a spec that serves the Agent
+// Card rather than by the compiler.
 func (a *application) newInteractiveService(
 	sessions agentlib.SessionFactory,
 	registry *prometheus.Registry,
@@ -322,7 +335,10 @@ func (a *application) newInteractiveService(
 		a.ProviderBaseURL,
 		registry,
 		interactive.NewAuthToken(a.InteractiveAuthToken),
-		a.A2APublicURL,
+		interactive.CardConfig{
+			Name:      a.A2AAgentName,
+			PublicURL: a.A2APublicURL,
+		},
 		permissions,
 	)
 }
