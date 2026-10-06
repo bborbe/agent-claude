@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.9.0
 
 - feat: bump `github.com/bborbe/agent` to v0.97.0 (also pulls in the v0.96.1 result-deliverer fix that keeps an in-process-advanced phase across saves) and name the deployed agent in the A2A Agent Card — the card now advertises the value of `A2A_AGENT_NAME` instead of the shared library default, supplied through `interactive.CardConfig` alongside the public URL, and a service agent refuses to start without `A2A_AGENT_NAME` rather than advertising a generic name
 
