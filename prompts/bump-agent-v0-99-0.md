@@ -22,7 +22,7 @@ This repository has no root `CLAUDE.md`. Read `docs/dod.md` — the Definition o
 
 Read before changing anything:
 - `go.mod` — pins `github.com/bborbe/agent v0.98.0` at line 10; this is the bump.
-- `main.go` — `application.newInteractiveService` calls `interactive.NewServiceWithPermissions(...)`, ending with `permissions` at line 342. That call is the one that breaks: v0.99.0 adds a final `maxSessions int` parameter to **both** `interactive.NewService` and `interactive.NewServiceWithPermissions`.
+- `main.go` — `application.newInteractiveService` calls `interactive.NewServiceWithPermissions(...)`, ending with `interactive.DefaultSessionIdleTimeout` (`permissions` is the second-to-last argument). That call is the one that breaks: v0.99.0 adds a final `maxSessions int` parameter to **both** `interactive.NewService` and `interactive.NewServiceWithPermissions`.
 - `README.md` — the `### Service mode` paragraph describes the session behaviour this change extends.
 - `$(go env GOMODCACHE)/github.com/bborbe/agent@v0.99.0/interactive/session-cache.go` — read `DefaultMaxSessions` and the `newSessionCache` doc comment to see what the parameter means, what a non-positive value does, and why the default is the value it is. The constructors are in the sibling `interactive/service.go`.
 
@@ -36,9 +36,9 @@ Note on `make generate`: `make precommit` runs `generate`, which wipes and regen
 </context>
 
 <requirements>
-1. **Bump the dependency.** `go get github.com/bborbe/agent@v0.99.0`, then `go mod tidy`. `bborbe/agent` is already imported, so the tidy cannot drop it; confirm `go list -m github.com/bborbe/agent` prints `github.com/bborbe/agent v0.99.0` — the version the build graph resolves, not merely what `go.mod` records.
+1. **Bump the dependency.** `go get github.com/bborbe/agent@v0.99.0`, then `go mod tidy`. `bborbe/agent` is already imported, so the tidy cannot drop it; confirm `go list -m github.com/bborbe/agent | grep -q 'v0.99.0'` exits 0 (the build graph resolves it, not merely what `go.mod` records) — the version the build graph resolves, not merely what `go.mod` records.
 
-2. **Pass the maximum at the one call site.** In `main.go`, `application.newInteractiveService` calls `interactive.NewServiceWithPermissions(...)`. Add `interactive.DefaultMaxSessions` as the **final** argument, after `permissions`. Do not introduce a CLI flag, an environment variable, or a new field on the `application` struct — the library's exported default is the value this deployment wants, and a second source for it would be one more thing to keep in step.
+2. **Pass the maximum at the one call site.** In `main.go`, `application.newInteractiveService` calls `interactive.NewServiceWithPermissions(...)`. Add `interactive.DefaultMaxSessions` as the **final** argument, after `interactive.DefaultSessionIdleTimeout`. Do not introduce a CLI flag, an environment variable, or a new field on the `application` struct — the library's exported default is the value this deployment wants, and a second source for it would be one more thing to keep in step.
    No new test is required, and say so in your final message so `docs/dod.md`'s "Changes to existing code have tests covering at least the changed behavior" is answered rather than reported as a blocker: the existing spec `application.newInteractiveService` in `main_internal_test.go` builds the service through the real `interactive.NewServiceWithPermissions`, so it already traverses the new parameter's boundary, and the maximum is not exposed on the `interactive.Service` interface to assert against.
 
 3. **Update the README.** The `### Service mode` paragraph describes the session behaviour. Extend it: the service now holds at most `interactive.DefaultMaxSessions` conversations at once and drops the least recently used one to make room, so a caller that returns after its conversation was dropped gets a working session that has started over rather than the previous conversation. `docs/dod.md` grades this ("README.md is updated if the change affects usage").
@@ -56,6 +56,7 @@ Note on `make generate`: `make precommit` runs `generate`, which wipes and regen
 - Do NOT change the module path, the image name, or anything in `Makefile.docker`.
 - Do NOT pin a version other than `v0.99.0`, and do NOT edit `go.sum` by hand.
 - Do NOT add a flag, an env var, or a struct field for the maximum.
+- Leave the pre-existing `exclude` block in `go.mod` exactly as it is. `docs/dod.md` says `go.mod` should carry no `exclude` directive, but that block predates this change and is not part of it — do not remove it, and if you notice the criterion, name it as pre-existing rather than reporting it as a blocker.
 </constraints>
 
 <verification>
@@ -64,7 +65,7 @@ Run `ROOTDIR=/workspace make precommit` at the repo root — it must pass.
 Then confirm the adoption landed:
 
 ```
-go list -m github.com/bborbe/agent          # prints github.com/bborbe/agent v0.99.0
+go list -m github.com/bborbe/agent | grep -q 'v0.99.0'
 grep -q 'DefaultMaxSessions' main.go
 grep -q 'DefaultMaxSessions' CHANGELOG.md
 grep -q 'DefaultMaxSessions' README.md
