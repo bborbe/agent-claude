@@ -340,6 +340,7 @@ func (a *application) newInteractiveService(
 			PublicURL: a.A2APublicURL,
 		},
 		permissions,
+		interactive.DefaultSessionIdleTimeout,
 	)
 }
 

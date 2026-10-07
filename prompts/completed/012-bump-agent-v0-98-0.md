@@ -1,5 +1,12 @@
 ---
-status: draft
+status: completed
+summary: Bumped github.com/bborbe/agent to v0.98.0 and passed interactive.DefaultSessionIdleTimeout (15 minutes) as the final argument to interactive.NewServiceWithPermissions in main.go, with README and CHANGELOG updated for the idle-session eviction.
+execution_id: agent-claude-session-idle-eviction-exec-012-bump-agent-v0-98-0
+dark-factory-version: v0.196.0
+created: "2026-10-07T11:42:58Z"
+queued: "2026-10-07T11:42:58Z"
+started: "2026-10-07T11:43:42Z"
+completed: "2026-10-07T11:50:10Z"
 ---
 
 # Bump bborbe/agent to v0.98.0 and pass the new session idle timeout
