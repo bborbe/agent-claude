@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: bump `github.com/bborbe/agent` to v0.98.0 and pass `interactive.DefaultSessionIdleTimeout` (15 minutes) as the interactive service's session idle period — the release makes the constructors take a `sessionIdleTimeout` and evict a session that has gone that long without serving a turn, closing its conversation and dropping it from the cache; the deployment states the library default explicitly, and a non-positive value would be normalised back to it rather than disabling eviction. A caller returning after a long pause now gets a working session whose conversation has been rebuilt rather than the previous one, and the `claude-interactive` container's memory is bounded instead of growing with every distinct session id it has served
+
 ## v0.9.3
 
 - fix: the `CLAUDE_ENV` and `ENV_CONTEXT` bags are no longer printed with their values by the startup configuration log — either can carry a credential (`ANTHROPIC_AUTH_TOKEN` is read from `CLAUDE_ENV` when the dedicated field is empty), and both were logged verbatim; each now renders as its sorted key names only, so the log still shows which variables a pod received

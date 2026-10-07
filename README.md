@@ -19,7 +19,12 @@ New agents are created by swapping instructions (agent `.claude/CLAUDE.md`) and 
 With `AGENT_TYPE=service` the binary takes a second shape: instead of running one task and
 exiting, it serves readiness, metrics, prompt intake, the permission endpoint, the A2A Agent Card
 at `/.well-known/agent-card.json` and the A2A JSON-RPC endpoint at `/a2a` on `LISTEN` (default
-`:9090`), holding one conversation per session id across requests. The HTTP surface comes entirely
+`:9090`), holding one conversation per session id while that session stays in use. A session that
+goes `interactive.DefaultSessionIdleTimeout` (15 minutes) without serving a turn has its
+conversation closed and dropped, and its next turn rebuilds it from scratch — so a caller returning
+after a long pause gets a working session that has started over rather than the previous
+conversation, and the container's memory stays bounded instead of growing with every distinct
+session id it has ever served. The HTTP surface comes entirely
 from the shared `github.com/bborbe/agent/interactive` library — this repo adds no routing of its
 own. The executor stamps `AGENT_TYPE=service` from the Config's `spec.type`; a service agent needs
 neither `TASK_CONTENT` nor `TASK_ID`, and `PROVIDER_BASE_URL` is dialled for the readiness check.
