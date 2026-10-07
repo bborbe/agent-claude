@@ -24,10 +24,16 @@ goes `interactive.DefaultSessionIdleTimeout` (15 minutes) without serving a turn
 conversation closed and dropped, and its next turn rebuilds it from scratch — so a caller returning
 after a long pause gets a working session that has started over rather than the previous
 conversation, and the container's memory stays bounded instead of growing with every distinct
-session id it has ever served. The HTTP surface comes entirely
-from the shared `github.com/bborbe/agent/interactive` library — this repo adds no routing of its
-own. The executor stamps `AGENT_TYPE=service` from the Config's `spec.type`; a service agent needs
-neither `TASK_CONTENT` nor `TASK_ID`, and `PROVIDER_BASE_URL` is dialled for the readiness check.
+session id it has ever served. Idle eviction alone bounds accumulation, not concurrency: a session
+that keeps serving turns is never idle, so the service also holds at most
+`interactive.DefaultMaxSessions` (8) conversations at once, closing and dropping the least recently
+used one to make room. A caller returning after its conversation was dropped that way still gets a
+working session — one that has started over — rather than an error, and the container's memory is
+bounded by how many sessions are held at once, not only by how long they accumulate. The HTTP
+surface comes entirely from the shared `github.com/bborbe/agent/interactive` library — this repo
+adds no routing of its own. The executor stamps `AGENT_TYPE=service` from the Config's `spec.type`;
+a service agent needs neither `TASK_CONTENT` nor `TASK_ID`, and `PROVIDER_BASE_URL` is dialled for
+the readiness check.
 `A2A_PUBLIC_URL` supplies the externally reachable address the Agent Card advertises — it is
 configuration, never derived from `LISTEN`, so the card cannot advertise the listen address.
 `A2A_AGENT_NAME` names the agent in the Agent Card, so a deployed pod advertises its own identity
