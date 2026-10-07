@@ -341,6 +341,7 @@ func (a *application) newInteractiveService(
 		},
 		permissions,
 		interactive.DefaultSessionIdleTimeout,
+		interactive.DefaultMaxSessions,
 	)
 }
 

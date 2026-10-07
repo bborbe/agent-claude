@@ -1,5 +1,12 @@
 ---
-status: draft
+status: completed
+summary: Bumped github.com/bborbe/agent to v0.99.0, passed interactive.DefaultMaxSessions at the NewServiceWithPermissions call site, and documented the bounded-session behaviour in README and CHANGELOG
+execution_id: agent-claude-v0-99-0-exec-013-bump-agent-v0-99-0
+dark-factory-version: v0.196.0
+created: "2026-10-07T20:33:45Z"
+queued: "2026-10-07T20:33:45Z"
+started: "2026-10-07T20:34:24Z"
+completed: "2026-10-07T20:40:04Z"
 ---
 
 # Bump bborbe/agent to v0.99.0 and pass the new max sessions argument

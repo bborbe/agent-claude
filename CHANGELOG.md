@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: bump `github.com/bborbe/agent` to v0.99.0 and pass `interactive.DefaultMaxSessions` (8) as the interactive service's maximum session count — the release makes the constructors take a final `maxSessions` and enforce it on the allocation path, closing and dropping the least recently used conversation to make room; idle eviction alone bounded accumulation but not concurrency, because a session that keeps serving turns is never idle, so many simultaneous callers still grew the container until the kernel killed it. The deployment states the library default explicitly, and a non-positive value would be normalised back to it with a warning rather than disabling the limit. A caller returning after its conversation was dropped still gets a working session that has started over rather than an error, and the `claude-interactive` container's memory is now bounded by how many sessions are held at once, not only by how long they accumulate
+
 ## v0.10.0
 
 - feat: bump `github.com/bborbe/agent` to v0.98.0 and pass `interactive.DefaultSessionIdleTimeout` (15 minutes) as the interactive service's session idle period — the release makes the constructors take a `sessionIdleTimeout` and evict a session that has gone that long without serving a turn, closing its conversation and dropping it from the cache; the deployment states the library default explicitly, and a non-positive value would be normalised back to it rather than disabling eviction. A caller returning after a long pause now gets a working session whose conversation has been rebuilt rather than the previous one, and the `claude-interactive` container's memory is bounded instead of growing with every distinct session id it has served
