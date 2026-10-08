@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: bump `github.com/bborbe/agent` to v0.99.1 — the release evaluates the interactive service's session size limit (`interactive.DefaultMaxSessions`, 8) when a session is created as well as on the 30-second sweep, so a burst of callers arriving inside one window can no longer overshoot the maximum and grow the `claude-interactive` container until the kernel kills it; v0.99.0 enforced the limit only on the sweep, which left exactly that window open, because a session that keeps serving turns is never idle and the sweep only runs on its tick. No source change accompanies the bump: no shipped exported signature moved, so `main.go`'s `interactive.NewServiceWithPermissions` call site compiles unchanged. The same sessions are held and the same least recently used ones are dropped — what changed is when the bound is evaluated, not which sessions are kept
+
+
 ## v0.11.0
 
 - feat: bump `github.com/bborbe/agent` to v0.99.0 and pass `interactive.DefaultMaxSessions` (8) as the interactive service's maximum session count — the release makes the constructors take a final `maxSessions` and enforce it on the allocation path, closing and dropping the least recently used conversation to make room; idle eviction alone bounded accumulation but not concurrency, because a session that keeps serving turns is never idle, so many simultaneous callers still grew the container until the kernel killed it. The deployment states the library default explicitly, and a non-positive value would be normalised back to it with a warning rather than disabling the limit. A caller returning after its conversation was dropped still gets a working session that has started over rather than an error, and the `claude-interactive` container's memory is now bounded by how many sessions are held at once, not only by how long they accumulate
