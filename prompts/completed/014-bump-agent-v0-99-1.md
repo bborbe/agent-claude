@@ -1,5 +1,12 @@
 ---
-status: draft
+status: completed
+summary: 'Bumped github.com/bborbe/agent to v0.99.1 so the interactive service enforces its session limit on the allocation path as well as the sweep, with a fix: entry under a new ## Unreleased and no Go source change'
+execution_id: agent-claude-v0-99-1-exec-014-bump-agent-v0-99-1
+dark-factory-version: v0.196.0
+created: "2026-10-08T11:08:35Z"
+queued: "2026-10-08T11:08:35Z"
+started: "2026-10-08T11:09:18Z"
+completed: "2026-10-08T11:15:22Z"
 ---
 
 # Bump bborbe/agent to v0.99.1
