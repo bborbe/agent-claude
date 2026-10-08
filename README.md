@@ -75,6 +75,8 @@ the ConfigMap — granted in the config repo, not here.
 | `CLAUDE_CONFIG_DIR` | no | — | Claude Code OAuth config directory (PVC mount) |
 | `ENV_CONTEXT` | no | — | Comma-separated `KEY=VAL` pairs injected into the prompt |
 | `CLAUDE_ENV` | no | — | Comma-separated `KEY=VAL` pairs passed to the Claude CLI subprocess |
+| `POD_ATTENTION_STORE_URL` | no | — | Attention store base URL forwarded to the Claude CLI subprocess; omitted when unset |
+| `POD_ATTENTION_TOKEN` | no | — | Attention store bearer token forwarded to the Claude CLI subprocess; omitted when unset, redacted from the startup log |
 | `KAFKA_BROKERS` | no | — | Required when `TASK_ID` is set |
 | `SENTRY_DSN` | no | — | Error reporting |
 
