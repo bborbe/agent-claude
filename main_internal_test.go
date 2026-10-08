@@ -150,6 +150,24 @@ var _ = Describe("application startup argument log", func() {
 		Expect(output).NotTo(ContainSubstring(sentinel))
 	})
 
+	It("reports the attention token as a length, never its value", func() {
+		const sentinel = "sentinel-pod-attention-token-4d19"
+
+		var buffer bytes.Buffer
+		log.SetOutput(&buffer)
+		DeferCleanup(func() { log.SetOutput(os.Stderr) })
+
+		app := &application{AttentionToken: sentinel}
+		Expect(argument.Print(context.Background(), app)).To(Succeed())
+
+		output := buffer.String()
+		Expect(output).To(ContainSubstring("AttentionToken"))
+		Expect(output).To(ContainSubstring(
+			fmt.Sprintf("AttentionToken length %d", len(sentinel)),
+		))
+		Expect(output).NotTo(ContainSubstring(sentinel))
+	})
+
 	// Either bag can carry a credential: buildClaudeEnv sources
 	// ANTHROPIC_AUTH_TOKEN from CLAUDE_ENV when its dedicated field is empty.
 	// The second bag deliberately uses a key name no marker heuristic would
@@ -205,6 +223,27 @@ var _ = Describe("application.buildClaudeEnv", func() {
 			"ANTHROPIC_MODEL":      "sonnet",
 			"FOO":                  "bar",
 		}))
+	})
+
+	// The library replaces the child environment with a fixed allowlist, so a pod
+	// whose own env carries the attention store still leaves its Claude child
+	// unable to reach it — the poster falls back to localhost:18080, where nothing
+	// listens. These two names ride the map that becomes the library's final env
+	// layer, which is what closes that gap.
+	It("forwards the attention-store vars to the Claude child", func() {
+		app := &application{
+			AttentionStoreURL: "http://attention-controller:18081",
+			AttentionToken:    "pod-attention-token",
+		}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"POD_ATTENTION_STORE_URL": "http://attention-controller:18081",
+			"POD_ATTENTION_TOKEN":     "pod-attention-token",
+		}))
+	})
+
+	It("omits the attention-store vars when unset, leaving a laptop run unchanged", func() {
+		app := &application{ClaudeEnvRaw: "FOO=bar"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{"FOO": "bar"}))
 	})
 })
 

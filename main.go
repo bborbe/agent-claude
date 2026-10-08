@@ -86,6 +86,16 @@ type application struct {
 	AnthropicAuthToken string                `required:"false" arg:"anthropic-auth-token" env:"ANTHROPIC_AUTH_TOKEN" usage:"Bearer token for ANTHROPIC_BASE_URL"                                  display:"length"`
 	AnthropicModel     claudelib.ClaudeModel `required:"false" arg:"anthropic-model"      env:"ANTHROPIC_MODEL"      usage:"Model name; also exposed to the claude subprocess as ANTHROPIC_MODEL"                  default:"sonnet"`
 
+	// Attention-store credentials, forwarded to the Claude child rather than kept
+	// on the pod. The pod's own environment carries both names, but the library
+	// replaces the child environment with a fixed allowlist, so without this
+	// forwarding the child never sees them and the poster falls back to
+	// http://localhost:18080, where nothing listens inside a pod. The values are
+	// read from the pod environment at runtime (POD_ATTENTION_TOKEN via a
+	// secretRef), so no credential is ever a literal in a CR or manifest.
+	AttentionStoreURL string `required:"false" arg:"attention-store-url" env:"POD_ATTENTION_STORE_URL" usage:"Attention store base URL forwarded to the Claude child"`
+	AttentionToken    string `required:"false" arg:"attention-token"     env:"POD_ATTENTION_TOKEN"     usage:"Attention store bearer token forwarded to the Claude child" display:"length"`
+
 	// Branch for Kafka result delivery
 	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
 
@@ -223,8 +233,14 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 
 // buildClaudeEnv assembles the environment passed to the Claude CLI process:
 // the ad-hoc CLAUDE_ENV pairs, with the three load-bearing Anthropic provider
-// vars overriding the same keys. Both agent shapes use it — the one-shot runner
-// and the long-lived session take the same config.
+// vars and the two attention-store vars overriding the same keys. Both agent
+// shapes use it — the one-shot runner and the long-lived session take the same
+// config.
+//
+// The returned map is handed to the runner as ClaudeRunnerConfig.Env, which the
+// library applies as its final layer over the child environment. That layer is
+// what lets a pod's Claude child see the attention store: the library otherwise
+// replaces the child env with a fixed allowlist.
 func (a *application) buildClaudeEnv() map[string]string {
 	claudeEnv := a.ClaudeEnvRaw.Pairs()
 	if claudeEnv == nil {
@@ -238,6 +254,12 @@ func (a *application) buildClaudeEnv() map[string]string {
 	}
 	if a.AnthropicModel != "" {
 		claudeEnv["ANTHROPIC_MODEL"] = a.AnthropicModel.String()
+	}
+	if a.AttentionStoreURL != "" {
+		claudeEnv["POD_ATTENTION_STORE_URL"] = a.AttentionStoreURL
+	}
+	if a.AttentionToken != "" {
+		claudeEnv["POD_ATTENTION_TOKEN"] = a.AttentionToken
 	}
 	return claudeEnv
 }
