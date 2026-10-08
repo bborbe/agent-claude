@@ -2,8 +2,24 @@ include tools.env
 
 default: precommit
 
-precommit: ensure format generate test check addlicense
+precommit: ensure format generate python-check test check addlicense
 	@echo "ready to commit"
+
+# The attention poster is vendored Python, and every other target in this file is Go —
+# nothing here parsed `scripts/*.py` before this. Without it a truncated or malformed
+# copy ships green: the image builds, CI passes, and the pod fails only when it first
+# tries to raise a gate. `ast.parse` rather than `py_compile` so no `__pycache__` is
+# written into the tree.
+PYTHON_SCRIPTS = $(wildcard scripts/*.py)
+
+.PHONY: python-check
+python-check:
+	@if [ -n "$(PYTHON_SCRIPTS)" ]; then \
+		python3 -c "import ast,sys; [ast.parse(open(f, encoding='utf-8').read(), f) for f in sys.argv[1:]]" $(PYTHON_SCRIPTS) \
+			&& echo "python-check: $(words $(PYTHON_SCRIPTS)) vendored script(s) parse"; \
+	else \
+		echo "python-check: no scripts/ to check"; \
+	fi
 
 ensure:
 	go mod tidy

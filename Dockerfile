@@ -12,7 +12,11 @@ FROM ${DOCKER_REGISTRY}/alpine:3.23 AS alpine
 # Claude Code CLI is pinned so the stream-json protocol the interactive session
 # implementation speaks cannot change under the image at build time.
 # 2.1.286 is the current stable from the npm registry (`npm view @anthropic-ai/claude-code version`).
-RUN apk --no-cache add ca-certificates curl bash nodejs npm \
+# `python3` carries the pod-side attention poster (scripts/pod-attention.py, vendored
+# from bborbe/claude-supervisor). The poster is a Python script, so without an
+# interpreter the image ships a file nothing can execute — and the failure surfaces
+# only when a pod first tries to raise a gate, not at build time.
+RUN apk --no-cache add ca-certificates curl bash nodejs npm python3 \
  && npm install -g --omit=dev --no-optional @anthropic-ai/claude-code@2.1.286 \
  && npm cache clean --force \
  && apk del npm \
@@ -25,6 +29,17 @@ ARG BUILD_DATE=unknown
 LABEL org.opencontainers.image.version="${BUILD_GIT_VERSION}"
 COPY --from=build /main /main
 COPY agent/ /agent/
+# The pod-side attention poster and the sibling it loads by path, vendored verbatim
+# from bborbe/claude-supervisor `scripts/`. It is how a cluster worker raises a
+# question or a permission gate to the operator's attention board; `python3` is
+# installed in the `alpine` stage above.
+# ⚠️ The poster resolves its siblings relative to its own directory (`_HERE`), so every
+# file it `_load`s must sit beside it — `answered-attribution.py` today. A missing one
+# fails at import, before argparse runs, so even `--help` dies rather than degrading.
+# ⚠️ Copied, not linked — re-vendor both when upstream changes, or the pod posts with
+# an older protocol.
+COPY scripts/pod-attention.py scripts/answered-attribution.py /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/pod-attention.py
 ENV HOME=/home/claude
 RUN mkdir -p /home/claude/.claude
 ENV ZONEINFO=/zoneinfo.zip
