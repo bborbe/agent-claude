@@ -1,6 +1,8 @@
 ---
-status: approved
+status: prompted
 approved: "2026-10-08T22:28:59Z"
+generating: "2026-10-08T22:29:59Z"
+prompted: "2026-10-08T22:37:21Z"
 branch: dark-factory/add-git-to-agent-claude-image
 ---
 

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: install `git` in the `agent-claude` image — the `alpine` stage's `apk --no-cache add` line gains the binary so a `claude-interactive` pod can clone a public repository into a directory under `/agent` and read it with its own `Read`/`Grep`/`Bash` tools. The image shipped no `git` at all, so the pod could not clone or read any repository: a credential would not have helped, because there was nothing to authenticate with. This is the binary alone — no credential, no push and no helper script — so a pod can read a public repository before any authentication exists, and the clone lands in the container's writable layer and is deliberately not persisted; the increment that authenticates over HTTPS is a separate change
+
+
 ## v0.12.1
 
 - fix: forward `POD_ATTENTION_STORE_URL` and `POD_ATTENTION_TOKEN` into the Claude child's environment — the pod's own env carries both, but the library replaces the child environment with a fixed allowlist (`HOME,PATH,USER,TZ,…`), so the poster running inside a turn never saw them and fell back to `http://localhost:18080`, where nothing listens inside a pod. The two names now ride `buildClaudeEnv`'s map, which the library applies as its final env layer — the seam `README.md` § Claude subprocess env allowlist already prescribes for exactly this case, so no `bborbe/agent` change is needed and no shared-library allowlist is widened. The failure is silent in the direction that matters: a turn that never needs the store completes normally, so the gap stays invisible until the first turn that must reach it. ⚠️ The token is read from the pod environment at runtime (`POD_ATTENTION_TOKEN` via a `secretRef`), so no credential becomes a literal in a CR or manifest; it is marked `display:"length"` and never reaches the startup log. Both names are omitted when unset, leaving a laptop run's child environment unchanged
