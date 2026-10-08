@@ -1,5 +1,7 @@
 ---
-status: draft
+status: approved
+approved: "2026-10-08T22:28:59Z"
+branch: dark-factory/add-git-to-agent-claude-image
 ---
 
 ## Summary
