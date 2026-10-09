@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: point the agent's vault instructions at the deployed `git-rest` service instead of a clone — the `## Vault` section of `agent/.claude/CLAUDE.md` now teaches `GET` / `POST` / `DELETE` on `http://vault-obsidian-personal:9090/api/v1/files/<path>`, because that service holds the git credential and commits and pushes on every write, so a `{"ok":true}` is already on the vault's remote. The previous text told the agent to clone the vault and push it itself, which this pod cannot do: it holds no vault credential and the ruling is that it never will, so the instruction described an operation that could only fail. `## Forbidden` gains exactly one named exception for that host — the cluster-DNS and private-IP ban holds everywhere else.
+
 ## v0.15.1
 
 - docs: repoint the `docs/creating-claude-agents.md` CRD example at the live registry — `docker.quant.benjamin-borbe.de:443` is decommissioned (404), so the example now reads `docker.prod.nuke.benjamin-borbe.de:443`.
