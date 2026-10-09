@@ -21,8 +21,9 @@ mirrored image from the quant registry, and `make buca` is banned for this repo 
 
 ## Build
 
-The image is not published for local use, so build it from the working tree. `vendor/` must
-exist first — the Dockerfile builds with `-mod=vendor`:
+Published tags exist for the cluster, but a local loop wants the image built from the tree you
+are actually iterating on. `vendor/` must exist first — the Dockerfile builds with
+`-mod=vendor`:
 
 ```bash
 go mod vendor
