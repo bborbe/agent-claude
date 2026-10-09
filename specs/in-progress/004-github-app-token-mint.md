@@ -1,5 +1,7 @@
 ---
-status: draft
+status: approved
+approved: "2026-10-09T17:00:01Z"
+branch: dark-factory/github-app-token-mint
 ---
 
 ## Summary
