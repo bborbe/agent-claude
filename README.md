@@ -116,17 +116,17 @@ Prefer constrained `Bash(path:*)` forms over bare `Bash` to minimize shell attac
 
 ## Local Quick Test
 
+Both paths skip K8s, the task controller, the task executor and git writeback.
+
+**Task shape — one task, then exit.** Iterating on prompts:
+
 ```bash
-cd ~/Documents/workspaces/agent/agent/claude
-go run . \
-  --task-content "$(cat /path/to/task.md)" \
-  --model sonnet \
-  --allowed-tools "Read,Write,Edit,Bash,Grep,Glob" \
-  --agent-dir agent \
-  --branch dev
+make run   # go run -mod=mod main.go -v=2; supply TASK_CONTENT, BRANCH, ALLOWED_TOOLS, … via the environment
 ```
 
-Skips K8s, task controller, task executor, git writeback. Useful for iterating on prompts.
+**Service shape — long-running, A2A.** Iterating on the A2A client/worker path: build the
+image, run it locally, and drive two turns on one conversation. See
+[docs/local-docker-run.md](docs/local-docker-run.md).
 
 ## Links
 
