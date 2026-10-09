@@ -57,6 +57,12 @@ REVIEWER NOTES — for the human reviewer, NOT instructions to the executing age
    not written into the image anywhere — the deployment supplies them at runtime. The
    Dockerfile only names the helper and the git config key. This keeps the image free of
    the credential contract, which is a deployment fact.
+
+8. `git config --system` writes `/etc/gitconfig`, which holds the helper's NAME only —
+   no credential value. The AC's "no credential reaches a file" check greps
+   `git config --system --list` for `ghs_|github_pat_|password=` and expects 0, which this
+   placement satisfies: the token exists only in the helper process's memory and on the
+   stdin/stdout pipe to `git`.
 -->
 
 <summary>
@@ -188,9 +194,9 @@ A note on reading the results: several checks are "must be absent" and are writt
 7. `grep -c 'git config --system' Dockerfile` — prints `1` (no second system-config directive).
 8. `grep -c 'git-credential-github-app' Dockerfile` — prints at least `3` (the `COPY` destination, the `chmod`, and the `git config` argument).
 9. `grep -c 'git_credential_github_app.py' Dockerfile` — prints `1` (the source path is referenced exactly once; the test file is not copied into the image).
-10. `grep -c '^chmod 0755' Dockerfile` — prints `0`; `grep -c 'chmod 0755' Dockerfile` — prints `2` (the pre-existing pod-attention chmod plus the new one, both on `RUN` lines).
+10. `grep -c 'chmod 0755' Dockerfile` — prints `2` (the pre-existing pod-attention chmod plus the new one); `grep -c '^chmod 0755' Dockerfile` — prints `0` (neither `chmod` is a stray top-level line).
 11. `grep -c 'apk --no-cache add' Dockerfile` — prints `1` (there is still exactly one package-installing line); `grep -c 'apk add' Dockerfile` — prints `0` (no second `apk add` was introduced anywhere).
-12. `! grep -qE '^RUN apk' Dockerfile | grep -v 'apk --no-cache add'` — not used; instead assert directly: `grep -c 'gh' Dockerfile` is NOT asserted (too loose). Assert the absence of a GitHub CLI install instead: `! grep -qE 'gh (install|apt|apk)|github-cli|openssh|gnupg' Dockerfile` — exits 0 (no package was added for this capability).
+12. `! grep -qE 'gh (install|apt|apk)|github-cli|openssh|gnupg|tini' Dockerfile` — exits 0 (no package was added for this capability, and the GitHub CLI is absent).
 13. `! grep -q 'GITHUB_APP' Dockerfile` — exits 0 (the environment variable names are a deployment fact and are not written into the image).
 14. `! grep -qE 'ghs_[A-Za-z0-9]|github_pat_|BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY' Dockerfile CHANGELOG.md` — exits 0 (no credential value in either file).
 15. `grep -c '^FROM ' Dockerfile` — prints `3`; `grep -c '^RUN ' Dockerfile` — prints `6`; `grep -c '^ENV ' Dockerfile` — prints `5`; `grep -c '^COPY ' Dockerfile` — prints `6`; `grep -c '^WORKDIR ' Dockerfile` — prints `1`; `grep -c '^CMD ' Dockerfile` — prints `1`; `grep -c '^ENTRYPOINT ' Dockerfile` — prints `1`; `grep -c '^LABEL ' Dockerfile` — prints `1`. Every count matches requirement 4's stated post-change baseline, i.e. exactly two `RUN` lines and one `COPY` line were added and nothing was removed or reordered.
