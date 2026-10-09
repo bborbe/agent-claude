@@ -50,6 +50,19 @@ REVIEWER NOTES — for the human reviewer, NOT instructions to the executing age
    `git-credential-github-app` (≥ 1 occurrence) and "the surrounding paragraph names
    source repositories". Both are stated as hard requirements, plus a pinned section
    heading (`## Source repositories`) so the file's section count is deterministic (6 → 7).
+
+8. README.md IS DELIBERATELY NOT UPDATED. `docs/dod.md` says "README.md is updated if the
+   change affects usage, configuration, or setup". The image gaining a credential helper is
+   arguably such a change, so this omission is called out rather than left silent. It is
+   deliberate: (a) the sibling prompts 015 (`git`) and 016 (`openssl`) made the same call for
+   the same file and neither touched README; (b) README.md does not enumerate the image's
+   packages or binaries anywhere — it documents the Config CRD's env vars, the cluster
+   heartbeat and the local test path (see its `## Env Vars`, `## Creating a New Agent` and
+   `## Local Quick Test` sections), so there is no list for the helper to join; (c) the
+   worker-facing documentation this increment actually needs lives in
+   `agent/.claude/CLAUDE.md`, which is what the worker reads, and that is this prompt. If
+   the reviewer wants a README line anyway, the right place is the `## How It Works` section
+   — but it should be a separate prompt, since this one is scoped to the guardrail file.
 -->
 
 <summary>
@@ -146,7 +159,7 @@ A note on reading the results: checks 9 and 10 are "must be absent" and are writ
 6. `grep -c '^## Vault$' agent/.claude/CLAUDE.md` — prints `1` (the Vault section still exists and was not renamed).
 7. `grep -c 'The service owns git, not you' agent/.claude/CLAUDE.md` — prints `1` (the Vault ruling bullet is byte-for-byte intact).
 8. `grep -c 'vault-obsidian-personal:9090' agent/.claude/CLAUDE.md` — prints `1`; `grep -c 'Do not write the daily note' agent/.claude/CLAUDE.md` — prints `1` (the Vault section's permitted host and its last bullet both survive).
-9. `! grep -q 'GITHUB_APP_PEM=' agent/.claude/CLAUDE.md` — exits 0 (the file names the variable but carries no value for it).
+9. `grep -c 'GITHUB_APP_PEM' agent/.claude/CLAUDE.md` — prints at least `1` (the new section names the credential variable); `! grep -q 'GITHUB_APP_PEM=' agent/.claude/CLAUDE.md` — exits 0 (the file names the variable but carries no value for it).
 10. `! grep -qE 'ghs_[A-Za-z0-9]|github_pat_|BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY' agent/.claude/CLAUDE.md` — exits 0 (no credential value anywhere in the file).
 11. `head -1 agent/.claude/CLAUDE.md` — prints `# Agent Guardrails` (the file's title line is untouched); `grep -c 'No secret exfiltration' agent/.claude/CLAUDE.md` — prints `1` (the `## Forbidden` credential ban is intact); `grep -c 'No system modification' agent/.claude/CLAUDE.md` — prints `1` (the `## Forbidden` system-config ban is intact, which is why the new section must not ask a worker to run `git config`).
 </verification>

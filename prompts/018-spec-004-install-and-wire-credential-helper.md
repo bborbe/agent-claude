@@ -77,7 +77,7 @@ REVIEWER NOTES — for the human reviewer, NOT instructions to the executing age
 </summary>
 
 <objective>
-Install the `git-credential-github-app` helper into the `agent-claude` image at `/usr/local/bin/git-credential-github-app`, make it executable, and point `git` at it for `github.com` over HTTPS with a build-time `git config --system` line, then add the matching `## Unreleased` entry to `CHANGELOG.md` — so that a `claude-interactive` pod holding only the environment the deployment already gives it can run `git clone`, commit and `git push` against a source repository with no credential on disk, none in any command line, and no operator step inside the pod.
+Install the `git-credential-github-app` helper into the `agent-claude` image at `/usr/local/bin/git-credential-github-app`, make it executable, and point `git` at it for `github.com` over HTTPS with a build-time `git config --system` line, then add the matching `## Unreleased` entry to `CHANGELOG.md` — so that a `claude-interactive` pod holding only the environment the deployment already gives it can run `git clone`, commit and `git push` against a source repository with no credential on disk, none in any command line, and no setup step inside the pod.
 </objective>
 
 <context>

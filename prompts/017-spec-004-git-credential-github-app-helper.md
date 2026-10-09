@@ -84,11 +84,23 @@ REVIEWER NOTES — for the human reviewer, NOT instructions to the executing age
    Every row is addressed.
 
 8. SECURITY MAPPING (spec's Security / Abuse → requirement):
-   - "The helper must not echo the token" → req 9, plus verification 10–12
+   - "The helper must not echo the token" → req 9, plus verification 5, 6 and 10 (the
+     failure paths assert empty/credential-free stdout) and 14 (no credential literal)
    - "takes no argument from the model that selects an App or installation" → req 2
      (the only identity inputs are the three env vars; the API base URL is a module
-     constant, never read from the environment) + req 11's absence check
+     constant, never read from the environment) + verification 12's absence check
    - "any diagnostic path that would print it … is a defect" → req 9
+
+9. JUDGEMENT CALL — THE EXIT-CODE TAXONOMY (req 8). The spec never names an exit code; it
+   says "non-zero" and requires the DIAGNOSTIC to distinguish the classes ("exits non-zero,
+   distinguishing a rejected JWT from a network failure"). Requirement 8 pins a five-value
+   taxonomy (1 local input, 2 JWT rejected, 3 throttled, 4 transport, 5 other API error) so
+   that "distinguishing" is mechanically assertable rather than a matter of reading prose,
+   and so a caller of the `token` subcommand can branch on the class. This is the one place
+   this prompt goes beyond the spec's literal text. If the reviewer prefers a uniform exit
+   1 with distinct messages only, requirements 8 and 12 (i) and the `rc=` checks in
+   verification 5, 6, 9 and 10 are the places to relax — nothing else depends on the
+   numbers.
 -->
 
 <summary>
@@ -266,11 +278,11 @@ A note on reading the results: several checks are "must be absent" and are writt
 8. `printf 'protocol=https\nhost=github.com\n\n' | python3 scripts/git_credential_github_app.py erase >/tmp/req8.out 2>/tmp/req8.err; echo "rc=$?"` — prints `rc=0`; `! test -s /tmp/req8.out` exits 0.
 9. `python3 scripts/git_credential_github_app.py bogus >/tmp/req9.out 2>/tmp/req9.err; echo "rc=$?"` — prints a non-zero `rc=`; `test -s /tmp/req9.err && echo has-diagnostic` prints `has-diagnostic`.
 10. `GITHUB_APP_ID=1 GITHUB_APP_INSTALLATION_ID=1 GITHUB_APP_PEM='!!!not-base64!!!' python3 scripts/git_credential_github_app.py token >/tmp/req10.out 2>/tmp/req10.err; echo "rc=$?"` — prints a non-zero `rc=`; `grep -c 'GITHUB_APP_PEM' /tmp/req10.err` prints at least `1`; `! test -s /tmp/req10.out` exits 0.
-11. `grep -c 'API_BASE = "https://api.github.com"' scripts/git_credential_github_app.py` — prints `1` (the API host is a module constant).
+11. `grep -cE '^API_BASE = "https://api\.github\.com"$' scripts/git_credential_github_app.py` — prints `1` (the API host is a module-level assignment, not a mention in a comment).
 12. `! grep -qE 'environ.*GITHUB_API|getenv\(.GITHUB_API|GITHUB_API_URL' scripts/git_credential_github_app.py` — exits 0 (no environment variable overrides the API host).
 13. `! grep -q 'curl' scripts/git_credential_github_app.py` — exits 0 (the mint does not shell out to `curl`; the JWT never reaches an argv).
 14. `! grep -qE 'ghs_[A-Za-z0-9]|github_pat_|BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY' scripts/git_credential_github_app.py` — exits 0 (no credential value is embedded in the helper).
-15. `grep -c '^python-test:' Makefile.precommit` — prints `1`; `grep -c 'python-check python-test test check addlicense' Makefile.precommit` — prints `1` (the target exists and is wired into the `precommit` recipe).
+15. `grep -c '^python-test:' Makefile.precommit` — prints `1`; `grep -cE '^precommit: .* python-test ' Makefile.precommit` — prints `1` (the target is wired into the `precommit` recipe line itself, not merely named in a comment); `grep -A1 '^python-test:' Makefile.precommit | grep -c 'unittest discover'` — prints `1` (the target actually runs the suite, so an empty or stubbed recipe cannot pass).
 16. `test -f scripts/git_credential_github_app_test.py && echo present` — prints `present` (the suite exists where the make target looks for it).
 17. `! grep -q 'curl' scripts/git_credential_github_app_test.py` — exits 0.
 </verification>
