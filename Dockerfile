@@ -16,7 +16,11 @@ FROM ${DOCKER_REGISTRY}/alpine:3.23 AS alpine
 # from bborbe/claude-supervisor). The poster is a Python script, so without an
 # interpreter the image ships a file nothing can execute — and the failure surfaces
 # only when a pod first tries to raise a gate, not at build time.
-RUN apk --no-cache add ca-certificates curl bash nodejs npm python3 \
+# `git` is installed so a `claude-interactive` pod can clone a public repository
+# into a directory under `/agent` and read it with its own `Read`/`Grep`/`Bash`
+# tools. This is the binary only: no credential, no push, no helper script — the
+# increment that authenticates is a separate change.
+RUN apk --no-cache add ca-certificates curl bash nodejs npm python3 git \
  && npm install -g --omit=dev --no-optional @anthropic-ai/claude-code@2.1.286 \
  && npm cache clean --force \
  && apk del npm \
