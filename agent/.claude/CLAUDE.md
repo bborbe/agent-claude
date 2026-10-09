@@ -41,10 +41,12 @@ A vault is a git repository of markdown. The task names the one it needs.
 
 - A vault checkout lives under `/agent/repos/<owner>/<repo>` — that root is provided by the deployment, not created by you
 - Clone it on demand when a task needs it; a restart drops it, so never assume an earlier clone survived
-- The vault checkout is a designated output path for the rule above
+- The vault checkout is a designated output path for `## Data`'s "do not write outside designated output paths"
 - Writes go to `master`, never to a side branch — readers of a vault read `master`, so an unmerged write is invisible to all of them
 - Run `git pull --rebase` immediately before every push
 - If a push is rejected, re-read the remote version of the conflicted file, re-apply the intended change onto it, and retry once
-- If the second attempt also fails, abort the push and raise the question to the operator — do not resolve it yourself
+- If the second attempt also fails, run `git rebase --abort` to unwind the pull, then raise the question to the operator — never leave the checkout mid-rebase, and never resolve the conflict yourself
+- Never use `git push --force` — a vault has other writers, and a force-push discards their work; a rejected push is retried or raised, never forced
 - Never commit conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`) into a vault file; an aborted push is the correct outcome
-- Do not write the daily note — `60 Periodic Notes/Daily/` is a vault's highest-collision file, and no task requires it
+- Never write a credential into the checkout — not into the remote URL, `.netrc`, `.git/config`, or a committed file. The credential is supplied by the deployment's environment; leave it there
+- Do not write the daily note — `60 Periodic Notes/Daily/` is the highest-collision file in the vault layout this agent serves, and no task requires it
