@@ -83,14 +83,14 @@ Add a `## Source repositories` section to `agent/.claude/CLAUDE.md` that names `
 <context>
 This repository has no root `CLAUDE.md` in a fresh worktree (`/CLAUDE.md` is in `.gitignore`), so do not look for one. Read `docs/dod.md` — the Definition of Done you are graded against, and the repository's declared `validationPrompt`. Read `.dark-factory.yaml` — it is the authority that travels with the repo (`workflow: direct`, `autoGeneratePrompts: true`, `autoRelease: false`).
 
-Read this file in full before editing — it is the file you change, and it is short (51 lines):
+Read this file in full before editing — it is the file you change, and it is short (50 lines):
 
-- `agent/.claude/CLAUDE.md` — read every line. Its structure today is `# Agent Guardrails` (line 1), then six `## ` sections in order: `## Scope` (line 5), `## Forbidden` (line 11), `## Output` (line 20), `## Tools` (line 26), `## Data` (line 32), `## Vault` (line 38). The file ends at line 51 with the Vault section's last bullet.
+- `agent/.claude/CLAUDE.md` — read every line. Its structure today is `# Agent Guardrails` (line 1), then six `## ` sections in order: `## Scope` (line 5), `## Forbidden` (line 11), `## Output` (line 20), `## Tools` (line 26), `## Data` (line 32), `## Vault` (line 38). The file ends at line 50 with the Vault section's last bullet.
 
 Also read, for context on what you are documenting (do NOT edit either):
 
-- `Dockerfile` — the final `FROM alpine` stage installs `scripts/git_credential_github_app.py` as `/usr/local/bin/git-credential-github-app` and runs `git config --system credential.https://github.com.helper git-credential-github-app`. Sibling prompt `018-spec-004-install-and-wire-credential-helper.md` makes that change; this prompt documents it.
-- `scripts/git_credential_github_app.py` — the helper. Sibling prompt `017-spec-004-git-credential-github-app-helper.md` creates it. Read its module docstring so the instruction you write matches the contract it implements: it reads `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PEM`, mints a token, and writes `username=x-access-token` plus `password=<token>` to `git` on stdout.
+- `Dockerfile` — the final `FROM alpine` stage installs `scripts/git_credential_github_app.py` as `/usr/local/bin/git-credential-github-app` and runs `git config --system credential.https://github.com.helper git-credential-github-app`. Sibling prompt `018-spec-004-install-and-wire-credential-helper.md` makes that change; this prompt documents it. If the wiring is not yet present, sibling prompt 018 has not run yet — document the contract as stated here; do NOT edit `Dockerfile`.
+- `scripts/git_credential_github_app.py` — the helper. Sibling prompt `017-spec-004-git-credential-github-app-helper.md` creates it. Read its module docstring so the instruction you write matches the contract it implements: it reads `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PEM`, mints a token, and writes `username=x-access-token` plus `password=<token>` to `git` on stdout. If the file does not exist, sibling prompt 017 has not run yet — write the instruction from the contract stated in this bullet; do NOT create the file.
 
 Lines you must not disturb (quoted from the current file, so you can confirm they survive):
 
@@ -113,7 +113,7 @@ Coding guides (in-container paths, read the ones this change touches):
 <requirements>
 1. **Append exactly one new top-level section, `## Source repositories`, at the end of `agent/.claude/CLAUDE.md`.** It goes after the `## Vault` section's last bullet (`- Do not write the daily note — …`), separated by a blank line, with the heading spelled exactly `## Source repositories` (two hashes, one space, those words, that capitalisation). Do NOT insert it before `## Vault`, do NOT rename or merge any existing section, and do NOT change the file's first line (`# Agent Guardrails`). The file must end up with exactly seven `## ` headings where it has six today.
 
-2. **Name the helper and state that `git` is already configured, so the worker has nothing to do.** The section must:
+2. **Name the helper and state that `git` is already configured, so the worker has nothing to do.** The section BODY must contain the literal lowercase phrase `source repositories` at least once — verification 3 is case-sensitive and the capitalised heading `## Source repositories` does NOT match it. The section must:
    (a) name `git-credential-github-app` exactly — this is the spec's Acceptance Criterion 7 anchor, and it must appear at least once;
    (b) state that the image already configures `git` for `github.com` over HTTPS at build time, so a `git clone` / `git push` against a source repository obtains a token automatically and the worker must NOT run `git config` or any other setup step;
    (c) state that a worker must not add the helper, a `git config` line or a credential of its own — the configuration is part of the image.
@@ -162,6 +162,8 @@ A note on reading the results: checks 9 and 10 are "must be absent" and are writ
 9. `grep -c 'GITHUB_APP_PEM' agent/.claude/CLAUDE.md` — prints at least `1` (the new section names the credential variable); `! grep -q 'GITHUB_APP_PEM=' agent/.claude/CLAUDE.md` — exits 0 (the file names the variable but carries no value for it).
 10. `! grep -qE 'ghs_[A-Za-z0-9]|github_pat_|BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY' agent/.claude/CLAUDE.md` — exits 0 (no credential value anywhere in the file).
 11. `head -1 agent/.claude/CLAUDE.md` — prints `# Agent Guardrails` (the file's title line is untouched); `grep -c 'No secret exfiltration' agent/.claude/CLAUDE.md` — prints `1` (the `## Forbidden` credential ban is intact); `grep -c 'No system modification' agent/.claude/CLAUDE.md` — prints `1` (the `## Forbidden` system-config ban is intact, which is why the new section must not ask a worker to run `git config`).
+12. `awk '/^## Source repositories/{f=1} f' agent/.claude/CLAUDE.md | grep -ci 'vault'` — prints at least `1` (the new section names the vault boundary; this is the ONLY guard for requirement 3 (c), the load-bearing half that keeps the section from reading as a contradiction of the `## Vault` ruling).
+13. `awk '/^## Source repositories/{f=1} f' agent/.claude/CLAUDE.md | grep -ciE 'no credential|fails|fail|headless'` — prints at least `1` (the new section states the no-credential pod's loud-failure behaviour; requirement 3 (d)).
 </verification>
 
 <success_criteria>
