@@ -10,3 +10,60 @@ reason = "containerd indirect dep, no upstream fix, not reachable per govulnchec
 [[IgnoredVulns]]
 id = "GO-2026-5622"
 reason = "containerd indirect dep, no upstream fix, not reachable per govulncheck"
+
+# Go 1.27.2-only stdlib advisories. The only fix is the Go bump, and Go 1.27.2 is
+# not adoptable here: errcheck v1.20.0 cannot read 1.27.2 export data and no newer
+# release exists. Mirror of VULNCHECK_IGNORE in Makefile.precommit, which carries
+# the exit condition. These ARE reachable (net/http, x/net HTTP/2) — suppressed
+# because unfixable, not because unreachable.
+[[IgnoredVulns]]
+id = "GO-2026-6599"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6600"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6603"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6604"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6605"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6607"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6608"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6609"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6610"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6611"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6612"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6613"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+
+[[IgnoredVulns]]
+id = "GO-2026-6617"
+reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
