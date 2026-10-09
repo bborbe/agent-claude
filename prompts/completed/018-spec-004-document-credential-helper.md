@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [004-github-app-token-mint]
+summary: Appended a `## Source repositories` section to agent/.claude/CLAUDE.md documenting the git-credential-github-app helper, its env-var credential contract, the unchanged Vault boundary, and the loud-failure behaviour for pods without the credential.
+execution_id: agent-claude-mint-exec-018-spec-004-document-credential-helper
+dark-factory-version: v0.196.0
 created: "2026-10-09T17:03:42Z"
 queued: "2026-10-09T17:09:33Z"
+started: "2026-10-09T17:16:36Z"
+completed: "2026-10-09T17:20:31Z"
 ---
 
 <!--

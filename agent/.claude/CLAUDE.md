@@ -48,3 +48,14 @@ A vault is a markdown repository served by a deployed `git-rest` service. The ta
 - A write body is capped at 10 MiB
 - `/readiness` answers `503` while a write is in flight or a push is stuck — a write that fails is raised to the operator, never retried blindly
 - Do not write the daily note — `60 Periodic Notes/Daily/` is the highest-collision file in the vault layout this agent serves, and no task requires it
+
+## Source repositories
+
+Source repositories are the git repositories a task may clone and push to over HTTPS. They are not the vault: everything below is scoped to source repositories and leaves `## Vault` exactly as it is.
+
+- `git` is already configured in this image for `github.com` over HTTPS at build time — the helper `git-credential-github-app` is installed and registered system-wide — so a `git clone` or `git push` against a source repository obtains its token automatically. Run no `git config` and no setup step of your own.
+- Do not add the helper, a `git config` line or a credential of your own. The configuration is part of the image, not of the task.
+- The credential comes from the pod's environment: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PEM` (a base64-encoded key). The helper mints a short-lived installation token from them on every invocation — there is no cache and nothing to renew.
+- The helper hands the token to `git` over the credential-helper protocol on a pipe. It is never written to a remote URL, `.git/config`, `~/.git-credentials`, `~/.netrc` or a command line. Never print, log, copy into a file or otherwise transmit it: the helper holds the credential so you do not have to, and this is `## Forbidden`'s `No secret exfiltration`, not an exception to it.
+- **This does NOT change `## Vault`.** The vault is still read and written through the `git-rest` service — do not run `git` against it, and never hold or pass a vault credential.
+- This capability is present only where the environment provides the credential. A pod whose environment carries none — the headless workload's Secret has no `GITHUB_APP_*` key — makes the helper fail loudly rather than letting `git` fall back to an anonymous request. Report that failure: do not retry, do not improvise another authentication path, and do not conclude the push succeeded.
