@@ -1,12 +1,12 @@
 
-[[IgnoredVulns]]
-id = "GO-2026-5064"
-reason = "containerd indirect dep, no upstream fix, not reachable per govulncheck"
-
-[[IgnoredVulns]]
-id = "GO-2026-5338"
-reason = "containerd indirect dep, no upstream fix, not reachable per govulncheck"
-
-[[IgnoredVulns]]
-id = "GO-2026-5622"
-reason = "containerd indirect dep, no upstream fix, not reachable per govulncheck"
+# Intentionally empty of IgnoredVulns.
+#
+# osv-scanner reads go.mod/go.sum, so it only sees module advisories. Every one
+# it used to report here was in golang.org/x/net, and that module is bumped to
+# v0.60.0 in the same change — a library bump, which does not touch the toolchain
+# the way a Go bump would. An entry that does not fire comes back as an unused
+# ignore, so the correct content for this file is now nothing at all.
+#
+# The stdlib-only advisories that govulncheck still reports are deliberately NOT
+# listed: osv-scanner cannot see them, so listing them would only produce unused
+# -ignore noise. They live in VULNCHECK_IGNORE, which is where they belong.
