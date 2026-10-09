@@ -1,69 +1,34 @@
 
-[[IgnoredVulns]]
-id = "GO-2026-5064"
-reason = "containerd indirect dep, no upstream fix, not reachable per govulncheck"
-
-[[IgnoredVulns]]
-id = "GO-2026-5338"
-reason = "containerd indirect dep, no upstream fix, not reachable per govulncheck"
-
-[[IgnoredVulns]]
-id = "GO-2026-5622"
-reason = "containerd indirect dep, no upstream fix, not reachable per govulncheck"
-
-# Go 1.27.2-only stdlib advisories. The only fix is the Go bump, and Go 1.27.2 is
-# not adoptable here: errcheck v1.20.0 cannot read 1.27.2 export data and no newer
-# release exists. Mirror of VULNCHECK_IGNORE in Makefile.precommit, which carries
-# the exit condition. These ARE reachable (net/http, x/net HTTP/2) — suppressed
-# because unfixable, not because unreachable.
-[[IgnoredVulns]]
-id = "GO-2026-6599"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6600"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+# Only advisories that actually fire may appear here: an entry the scan does not
+# report is echoed back as an unused ignore, so this list is pruned to what
+# osv-scanner needs rather than mirrored from VULNCHECK_IGNORE.
+#
+# These five are the golang.org/x/net HTTP/2 advisories, fixed only by Go 1.27.2
+# together with x/net v0.60.0 — and that Go bump is not adoptable here (errcheck
+# v1.20.0 cannot read 1.27.2 export data; see the exit condition above
+# VULNCHECK_IGNORE in Makefile.precommit). The stdlib-only advisories govulncheck
+# reports are absent on purpose: osv-scanner reads go.mod/go.sum, does not see
+# them, and listing them would produce unused-ignore noise.
+#
+# The three containerd entries that used to sit here (GO-2026-5064, -5338, -5622)
+# were dropped on the v2.6.0 bump, which no longer reports them.
 
 [[IgnoredVulns]]
 id = "GO-2026-6603"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6604"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6605"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6607"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6608"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6609"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
 
 [[IgnoredVulns]]
 id = "GO-2026-6610"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
 
 [[IgnoredVulns]]
 id = "GO-2026-6611"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
 
 [[IgnoredVulns]]
 id = "GO-2026-6612"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6613"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
 
 [[IgnoredVulns]]
 id = "GO-2026-6617"
-reason = "stdlib, fixed only by Go 1.27.2; Go bump not adoptable (errcheck)"
+reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
