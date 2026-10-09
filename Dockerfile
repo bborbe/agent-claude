@@ -20,7 +20,12 @@ FROM ${DOCKER_REGISTRY}/alpine:3.23 AS alpine
 # into a directory under `/agent` and read it with its own `Read`/`Grep`/`Bash`
 # tools. This is the binary only: no credential, no push, no helper script — the
 # increment that authenticates is a separate change.
-RUN apk --no-cache add ca-certificates curl bash nodejs npm python3 git \
+# `openssl` is installed so a pod can produce an RS256 signature. A GitHub App
+# installation token is obtained by signing a JWT with the App's private key,
+# and the image shipped no tool that could sign one. This is the binary only:
+# no credential, no key, no token-minting script — the increment that wires the
+# credential is a separate change.
+RUN apk --no-cache add ca-certificates curl bash nodejs npm python3 git openssl \
  && npm install -g --omit=dev --no-optional @anthropic-ai/claude-code@2.1.286 \
  && npm cache clean --force \
  && apk del npm \

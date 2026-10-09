@@ -2,7 +2,9 @@ module github.com/bborbe/agent-claude
 
 go 1.27.1
 
-tool github.com/maxbrunsfeld/counterfeiter/v6
+tool (
+	github.com/maxbrunsfeld/counterfeiter/v6
+)
 
 require (
 	github.com/bborbe/agent v0.99.1
