@@ -70,8 +70,13 @@ errcheck:
 # without types was imported", export data version 5 > maximum supported 4) and
 # needs golangci-lint >= v2.14.0. `errcheck` v1.20.0 is the newest release, so no
 # version can read 1.27.2 export data and the check chain cannot move. Unfixable
-# here for now, which is the category this list exists for. Mirrored in
-# .trivyignore and .osv-scanner.toml — all three scanners must agree.
+# here for now, which is the category this list exists for.
+# ⚠️ Five of them (6603, 6610, 6611, 6612, 6617) ALSO carry a `golang.org/x/net`
+# line, and x/net IS bumped to v0.60.0 in the same change — a library bump that
+# does not touch the toolchain. That retires them for osv-scanner and trivy, which
+# read the module graph; it does NOT retire them here, because govulncheck reports
+# each of the five against the 1.27.1 stdlib as well. Removing them on the
+# strength of the x/net bump was tried and is wrong.
 # Listed individually, NOT as a range: 6601, 6602, 6606, 6614, 6615 and 6616 fall
 # inside it and are deliberately absent — govulncheck does not report them against
 # this module's graph, and suppressing an advisory that is not firing would hide a

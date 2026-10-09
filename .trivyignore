@@ -24,7 +24,15 @@ GO-2026-5622
 
 # Go 1.27.2-only stdlib advisories — the only fix is the Go bump, and Go 1.27.2
 # is not adoptable here (errcheck v1.20.0 cannot read 1.27.2 export data).
-# Mirror of VULNCHECK_IGNORE in Makefile.precommit; exit condition documented there.
+# Exit condition documented above VULNCHECK_IGNORE in Makefile.precommit.
+#
+# ⚠️ These are currently INERT: with golang.org/x/net bumped to v0.60.0, `make
+# trivy` reports 0 vulnerabilities for go.mod, so nothing here is being
+# suppressed today. They are kept as insurance against a trivy-db change that
+# surfaces the stdlib advisories, and because trivy does not fail on an unused
+# entry. Note that trivy keys some of these findings on CVE ids rather than the
+# GO- ids govulncheck uses — that mismatch is why the ids added here during the
+# 2026-10-09 incident never matched, and the library patch was the real fix.
 GO-2026-6599
 GO-2026-6600
 GO-2026-6603

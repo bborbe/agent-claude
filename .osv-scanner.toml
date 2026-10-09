@@ -1,34 +1,12 @@
 
-# Only advisories that actually fire may appear here: an entry the scan does not
-# report is echoed back as an unused ignore, so this list is pruned to what
-# osv-scanner needs rather than mirrored from VULNCHECK_IGNORE.
+# Intentionally empty of IgnoredVulns.
 #
-# These five are the golang.org/x/net HTTP/2 advisories, fixed only by Go 1.27.2
-# together with x/net v0.60.0 — and that Go bump is not adoptable here (errcheck
-# v1.20.0 cannot read 1.27.2 export data; see the exit condition above
-# VULNCHECK_IGNORE in Makefile.precommit). The stdlib-only advisories govulncheck
-# reports are absent on purpose: osv-scanner reads go.mod/go.sum, does not see
-# them, and listing them would produce unused-ignore noise.
+# osv-scanner reads go.mod/go.sum, so it only sees module advisories. Every one
+# it used to report here was in golang.org/x/net, and that module is bumped to
+# v0.60.0 in the same change — a library bump, which does not touch the toolchain
+# the way a Go bump would. An entry that does not fire comes back as an unused
+# ignore, so the correct content for this file is now nothing at all.
 #
-# The three containerd entries that used to sit here (GO-2026-5064, -5338, -5622)
-# were dropped on the v2.6.0 bump, which no longer reports them.
-
-[[IgnoredVulns]]
-id = "GO-2026-6603"
-reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6610"
-reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6611"
-reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6612"
-reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
-
-[[IgnoredVulns]]
-id = "GO-2026-6617"
-reason = "x/net HTTP/2, fixed only by Go 1.27.2 + x/net v0.60.0; Go bump not adoptable (errcheck)"
+# The stdlib-only advisories that govulncheck still reports are deliberately NOT
+# listed: osv-scanner cannot see them, so listing them would only produce unused
+# -ignore noise. They live in VULNCHECK_IGNORE, which is where they belong.
