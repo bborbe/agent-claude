@@ -1,7 +1,11 @@
 ---
-spec: ["004-github-app-token-mint"]
-status: draft
+status: executing
+spec: [004-github-app-token-mint]
+execution_id: agent-claude-mint-exec-017-spec-004-git-credential-github-app-helper
+dark-factory-version: v0.196.0
 created: "2026-10-09T17:03:42Z"
+queued: "2026-10-09T17:09:33Z"
+started: "2026-10-09T17:09:34Z"
 ---
 
 <!--

@@ -1,7 +1,8 @@
 ---
-spec: ["004-github-app-token-mint"]
-status: draft
+status: approved
+spec: [004-github-app-token-mint]
 created: "2026-10-09T17:03:42Z"
+queued: "2026-10-09T17:09:33Z"
 ---
 
 <!--
