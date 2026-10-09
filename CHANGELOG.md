@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.15.1
 
 - docs: repoint the `docs/creating-claude-agents.md` CRD example at the live registry — `docker.quant.benjamin-borbe.de:443` is decommissioned (404), so the example now reads `docker.prod.nuke.benjamin-borbe.de:443`.
 
