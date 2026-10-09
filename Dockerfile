@@ -49,6 +49,22 @@ COPY agent/ /agent/
 # an older protocol.
 COPY scripts/pod-attention.py scripts/answered-attribution.py /usr/local/bin/
 RUN chmod 0755 /usr/local/bin/pod-attention.py
+# The git credential helper. It mints a GitHub App installation token from the
+# environment and serves the git credential-helper protocol, so `git` obtains a
+# token without the credential ever reaching a remote URL, a config file or a
+# command line — `git` runs the helper itself and reads the answer from its
+# stdout. The executable is named exactly `git-credential-github-app` because
+# that is the name `git` looks for: there is no second executable and no alias.
+COPY scripts/git_credential_github_app.py /usr/local/bin/git-credential-github-app
+RUN chmod 0755 /usr/local/bin/git-credential-github-app
+# Point `git` at the helper for github.com over HTTPS. This is a BUILD-time
+# configuration, not a runtime one: agent/.claude/CLAUDE.md § Forbidden forbids a
+# worker from modifying system config, so a worker cannot be asked to run
+# `git config` itself — and a worker that forgets to set anything up cannot
+# therefore operate unauthenticated-but-seemingly-fine.
+# `git` writes no credential here: /etc/gitconfig gains the helper's name only,
+# and the token is minted per invocation and handed over on stdin/stdout.
+RUN git config --system credential.https://github.com.helper git-credential-github-app
 ENV HOME=/home/claude
 RUN mkdir -p /home/claude/.claude
 ENV ZONEINFO=/zoneinfo.zip

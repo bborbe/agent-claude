@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [004-github-app-token-mint]
+summary: 'Installed the git-credential-github-app helper into the agent-claude image (COPY renamed to the exact git-credential-helper name, chmod 0755, build-time git config --system wiring for github.com HTTPS) and added the matching ## Unreleased feat bullet to CHANGELOG.md.'
+execution_id: agent-claude-mint-exec-019-spec-004-install-and-wire-credential-helper
+dark-factory-version: v0.196.0
 created: "2026-10-09T17:03:42Z"
 queued: "2026-10-09T17:10:51Z"
+started: "2026-10-09T17:20:32Z"
+completed: "2026-10-09T17:25:05Z"
 ---
 
 <!--
