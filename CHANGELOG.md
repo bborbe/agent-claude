@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.15.0
 
 - feat: install `openssl` in the `agent-claude` image — the `alpine` stage's `apk --no-cache add` line gains the binary so a `claude-interactive` pod can sign a JWT with an RS256 private key and print the signature. A GitHub App installation token is minted by signing a JWT with the App's private key and exchanging it at `POST /app/installations/<id>/access_tokens`, and every step of that exchange except the signature was already possible in the pod, which carries `curl` and `python3`; the image shipped no tool that could sign one, so the pod could not produce the signature even though it could perform the exchange. This is the binary alone — no credential, no key, no token-minting script and no git change — so a pod can sign before any credential exists, and the increment that wires a credential is a separate change
 
