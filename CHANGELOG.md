@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.13.1
 
 - fix: bump `golang.org/x/net` to v0.60.0, with its `x/crypto`, `x/mod`, `x/sync`, `x/sys`, `x/term` and `x/text` transitives — the third gate behind the same required check, and the one that showed the earlier suppressions were aimed at the wrong layer. `trivy` reports these findings under **CVE** ids (`CVE-2026-97032`, `CVE-2026-78659`, `CVE-2026-78660`, `CVE-2026-78663`), not the `GO-` ids govulncheck uses, so the ids added to `.trivyignore` never matched them; the correct fix was the patch trivy itself named, `v0.58.0 → 0.60.0`. ⚠️ This is a **library** bump, not a toolchain bump, and the distinction is load-bearing: `go` stays at 1.27.1, because the `errcheck`/`golangci-lint` breakage that blocked the Go bump comes from the *toolchain* reading 1.27.2 export data, and a library bump touches none of that. Verified locally: `make lint` 0 issues, `make trivy` 0 vulnerabilities, `make osv-scanner` 0 packages affected with no unused ignores. Five of the thirteen advisories in `VULNCHECK_IGNORE` also carry an `x/net` line, but this bump does **not** retire them there — govulncheck reports each against the 1.27.1 stdlib as well, which was confirmed by removing them and watching `vulncheck` go red
 
