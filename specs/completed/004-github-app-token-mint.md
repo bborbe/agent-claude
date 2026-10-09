@@ -1,8 +1,9 @@
 ---
-status: verifying
+status: completed
 approved: "2026-10-09T17:00:01Z"
 generating: "2026-10-09T17:00:53Z"
 verifying: "2026-10-09T17:25:05Z"
+completed: "2026-10-09T17:32:59Z"
 branch: dark-factory/github-app-token-mint
 ---
 
