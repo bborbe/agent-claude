@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: install the `git-credential-github-app` helper in the `agent-claude` image and point `git` at it at build time — `scripts/git_credential_github_app.py` is copied to `/usr/local/bin/git-credential-github-app`, chmodded `0755`, and a `git config --system credential.https://github.com.helper git-credential-github-app` line wires it for `github.com` over HTTPS, so a `claude-interactive` pod can clone, commit and push a source repository with the installation token minted from `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and the `GITHUB_APP_PEM` and handed to `git` over the credential-helper protocol on stdin/stdout — never written to a remote URL, a config file, a credentials file or a command line. The wiring is build-time rather than runtime because a worker is forbidden from modifying system config, so a worker that forgets to set anything up fails loudly rather than operating unauthenticated-but-seemingly-fine. This completes the pair the binary-only predecessors began — `git` in v0.14.0 and `openssl` in v0.15.0 — with the prod Secret and apply remaining a separate deployment step.
+
 ## v0.16.0
 
 - feat: point the agent's vault instructions at the deployed `git-rest` service instead of a clone — the `## Vault` section of `agent/.claude/CLAUDE.md` now teaches `GET` / `POST` / `DELETE` on `http://vault-obsidian-personal:9090/api/v1/files/<path>`, because that service holds the git credential and commits and pushes on every write, so a `{"ok":true}` is already on the vault's remote. The previous text told the agent to clone the vault and push it itself, which this pod cannot do: it holds no vault credential and the ruling is that it never will, so the instruction described an operation that could only fail. `## Forbidden` gains exactly one named exception for that host — the cluster-DNS and private-IP ban holds everywhere else.
