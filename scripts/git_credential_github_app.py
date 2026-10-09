@@ -5,9 +5,9 @@
 over the helper protocol on stdin/stdout and never lands in a remote URL,
 `.git/config`, `~/.git-credentials`, `~/.netrc` or an argv. The identity comes
 from exactly three environment variables -- `GITHUB_APP_ID`,
-`GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PEM` (base64-encoded PEM) -- and
-the API host is the module constant below, so nothing in the environment can
-steer the helper at a different App, installation or host.
+`GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PEM` (the PEM key itself; base64
+is also accepted). The API host is the module constant below, so nothing in the
+environment can steer the helper at a different App, installation or host.
 
   get     git credential-helper protocol; prints username and password
   store   no-op; nothing is ever persisted
@@ -60,8 +60,8 @@ EXIT_API_ERROR = 5
 
 APP_ENV_NAMES = ("GITHUB_APP_ID", "GITHUB_APP_INSTALLATION_ID", "GITHUB_APP_PEM")
 
-# The deployment produces GITHUB_APP_PEM with `base64`, which wraps at 76
-# columns, so embedded newlines are normal input rather than corruption.
+# A base64-encoded GITHUB_APP_PEM may wrap at 76 columns, so embedded newlines
+# are normal input rather than corruption when the value arrives in that shape.
 ASCII_WHITESPACE = " \t\n\r\v\f"
 
 ApiResponse = collections.namedtuple("ApiResponse", ["status", "headers", "body"])
@@ -91,12 +91,37 @@ def read_env(environ):
 
 
 def decode_pem(value):
-    """Strip ASCII whitespace and base64-decode GITHUB_APP_PEM into key bytes."""
+    """Return the PEM bytes from GITHUB_APP_PEM, accepting either shape.
+
+    The deployment delivers the key as RAW PEM, not base64: the Secret template
+    renders `teamvaultFile | base64` into the Secret's `.data`, and Kubernetes
+    DECODES `.data` when it injects the value as an environment variable -- so
+    the pod's `GITHUB_APP_PEM` is the PEM itself. Measured 2026-10-09 against
+    the rendered `claude-agent` Secret: `.data.GITHUB_APP_PEM` base64-decodes to
+    a 1675-byte `-----BEGIN RSA PRIVATE KEY-----`, which is what the pod sees.
+
+    Base64 is still accepted, because that is what a Secret looks like before
+    injection and what an operator pasting a value by hand would supply. Both
+    shapes are handled deliberately: assuming either one alone leaves the pod
+    holding a credential it cannot use, which is the inert-credential failure
+    this helper exists to remove.
+    """
+    if "-----BEGIN" in value:
+        return value.encode("utf-8")
     stripped = "".join(char for char in value if char not in ASCII_WHITESPACE)
     try:
-        return base64.b64decode(stripped, validate=True)
+        decoded = base64.b64decode(stripped, validate=True)
     except (binascii.Error, ValueError) as err:
-        raise HelperError(f"GITHUB_APP_PEM is not decodable base64: {err}", EXIT_LOCAL_INPUT)
+        raise HelperError(
+            f"GITHUB_APP_PEM is neither a PEM nor decodable base64: {err}",
+            EXIT_LOCAL_INPUT,
+        )
+    if b"-----BEGIN" not in decoded:
+        raise HelperError(
+            "GITHUB_APP_PEM base64-decoded but is not a PEM private key",
+            EXIT_LOCAL_INPUT,
+        )
+    return decoded
 
 
 def build_jwt(app_id, pem_bytes, now):

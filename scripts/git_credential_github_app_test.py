@@ -192,6 +192,32 @@ class GitCredentialGithubAppTest(unittest.TestCase):
         self.assertEqual(out, f"{FAKE_TOKEN}\n")
         self.assertEqual(err, "")
 
+    def test_raw_pem_mints(self):
+        """The pod delivers the PEM itself, not base64.
+
+        The Secret template renders `teamvaultFile | base64` into the Secret's
+        `.data`, and Kubernetes DECODES `.data` when injecting an environment
+        variable -- so the pod's GITHUB_APP_PEM is the PEM. Requiring base64
+        here left the helper unable to mint in the pod at all, while every
+        mocked test passed. Measured 2026-10-09 against the rendered Secret.
+        """
+        values = self.valid_env()
+        values["GITHUB_APP_PEM"] = self.key_pem.decode("ascii")
+        response = helper.ApiResponse(200, {}, {"token": FAKE_TOKEN})
+        with mock.patch.object(helper, "post_json", return_value=response):
+            code, out, err = run_helper(["token"], values)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, f"{FAKE_TOKEN}\n")
+        self.assertEqual(err, "")
+
+    def test_base64_that_is_not_a_pem_fails_loudly(self):
+        values = self.valid_env()
+        values["GITHUB_APP_PEM"] = base64.b64encode(b"not a pem at all").decode("ascii")
+        code, out, err = run_helper(["token"], values)
+        self.assertEqual(code, 1)
+        self.assertIn("GITHUB_APP_PEM", err)
+        self.assertEqual(out, "")
+
     def test_api_failure_classes_map_to_exit_codes(self):
         cases = (
             ("rejected-jwt", helper.ApiResponse(401, {}, {"message": "Bad credentials"}), 2),

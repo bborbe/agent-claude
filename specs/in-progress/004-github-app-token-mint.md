@@ -1,7 +1,8 @@
 ---
-status: approved
+status: verifying
 approved: "2026-10-09T17:00:01Z"
 generating: "2026-10-09T17:00:53Z"
+verifying: "2026-10-09T17:25:05Z"
 branch: dark-factory/github-app-token-mint
 ---
 
@@ -79,7 +80,7 @@ A worker running in a `claude-interactive` pod, holding only the environment the
 ## Constraints
 
 - **The credential arrives as environment variables only** — `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PEM` — because that is what `bborbe/nuke#420` already wires. The image must not introduce a second naming scheme.
-- **`GITHUB_APP_PEM` is base64-encoded PEM** as delivered by the Secret (`teamvaultFile | base64`). The mint step decodes it; it must not assume raw PEM.
+- **`GITHUB_APP_PEM` is the PEM key itself, and the mint step must accept it as such — and accept base64 too.** ⚠️ **Corrected 2026-10-09 after end-to-end verification; the first draft of this constraint was wrong and the implementation faithfully reproduced the error.** The Secret renders `teamvaultFile | base64` into `.data`, but **Kubernetes decodes `.data` when it injects the value as an environment variable** — so the pod's `GITHUB_APP_PEM` is the raw PEM, not base64. Measured against the rendered `claude-agent` Secret: `.data.GITHUB_APP_PEM` base64-decodes to a 1675-byte `-----BEGIN RSA PRIVATE KEY-----`, which is what the pod receives. Base64 must also be accepted, because that is the shape before injection and the shape a hand-pasted value takes. **Assuming either one alone leaves the pod holding a credential it cannot use** — the inert-credential failure this spec exists to remove — and no mocked unit test can tell the two apart, which is why the requirement is "accept both" rather than "pick one".
 - **No new package.** `openssl`, `git` and `python3` are already in the image; `agent/.claude/CLAUDE.md:14` forbids package installation at runtime and the image build must not add a package either. The mint must not add a Go dependency to the agent binary — this is an image-level capability, not an application one.
 - **No `gh`.** Installing the GitHub CLI would widen the image's surface and is not needed to make `git` authenticate.
 - **The helper is wired at build time via `git config --system`**, never by the worker at runtime — `agent/.claude/CLAUDE.md:16` forbids a worker modifying system config.
@@ -92,7 +93,7 @@ A worker running in a `claude-interactive` pod, holding only the environment the
 | Trigger | Expected behavior | Recovery |
 |---|---|---|
 | `GITHUB_APP_PEM` unset or empty (e.g. a `claude-headless` pod, which has no such key) | Helper exits non-zero, names `GITHUB_APP_PEM` on stderr, writes no `password=` line | Operator confirms the `claude-agent` Secret carries `GITHUB_APP_PEM`; `BRANCH=dev make secrets` re-applies it |
-| PEM present but not base64-decodable | Helper exits non-zero naming the decode step | Operator re-checks the TeamVault entry shape (`teamvaultFile`, not `teamvaultPassword`) |
+| `GITHUB_APP_PEM` is neither a PEM nor base64-decodes to one | Helper exits non-zero naming `GITHUB_APP_PEM` and the shape it expected | Operator re-checks the TeamVault entry (`teamvaultFile`, not `teamvaultPassword`) and confirms the Secret renders a PEM |
 | JWT rejected by GitHub (401) | Helper exits non-zero, distinguishing a rejected JWT from a network failure | Operator confirms `GITHUB_APP_ID` matches the PEM's App — a mismatched pair is the common cause |
 | Installation does not cover the repo | `git` receives a valid token and the *server* refuses with 403/404 | Expected and correct — the scope boundary. A worker reports the refusal rather than retrying |
 | `POST /app/installations/<id>/access_tokens` throttled (403 with rate-limit headers) | Helper exits non-zero and names the throttle rather than reporting a generic auth failure | Operator waits for the window; if a worker's git operations are frequent enough to hit it, that is a finding about the workload, not a reason to cache a token past its life |
