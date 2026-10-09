@@ -1,5 +1,5 @@
 ---
-status: generating
+status: approved
 approved: "2026-10-09T17:00:01Z"
 generating: "2026-10-09T17:00:53Z"
 branch: dark-factory/github-app-token-mint

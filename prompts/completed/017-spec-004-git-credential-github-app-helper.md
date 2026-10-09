@@ -1,11 +1,13 @@
 ---
-status: executing
+status: completed
 spec: [004-github-app-token-mint]
+summary: Added scripts/git_credential_github_app.py, a stdlib-only GitHub App installation-token git credential helper with a 12-case unittest suite and a python-test make target wired into precommit.
 execution_id: agent-claude-mint-exec-017-spec-004-git-credential-github-app-helper
 dark-factory-version: v0.196.0
 created: "2026-10-09T17:03:42Z"
 queued: "2026-10-09T17:09:33Z"
 started: "2026-10-09T17:09:34Z"
+completed: "2026-10-09T17:16:36Z"
 ---
 
 <!--

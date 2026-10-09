@@ -2,7 +2,7 @@ include tools.env
 
 default: precommit
 
-precommit: ensure format generate python-check test check addlicense
+precommit: ensure format generate python-check python-test test check addlicense
 	@echo "ready to commit"
 
 # The attention poster is vendored Python, and every other target in this file is Go —
@@ -20,6 +20,17 @@ python-check:
 	else \
 		echo "python-check: no scripts/ to check"; \
 	fi
+
+# `python-check` only parses the scripts; it never runs them. The credential
+# helper's contract -- the git credential-helper protocol, the base64 key
+# decoding, the JWT bounds and every failure exit code -- is only proven by
+# executing it, so the suite rides the same gate rather than a separate CI job.
+# PYTHONDONTWRITEBYTECODE for the same reason `python-check` uses `ast.parse`
+# instead of `py_compile`: importing the module under test otherwise drops a
+# `scripts/__pycache__` into the tree, which .gitignore does not cover.
+.PHONY: python-test
+python-test:
+	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -t scripts -p '*_test.py' -v
 
 ensure:
 	go mod tidy
