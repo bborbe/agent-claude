@@ -186,6 +186,27 @@ var _ = Describe("application startup argument log", func() {
 		Expect(output).NotTo(ContainSubstring(sentinel))
 	})
 
+	// GITHUB_APP_PEM is private key material, so it takes the same display:"length"
+	// treatment as the two credentials above: the startup log names the field and
+	// reports its length, and the key itself never reaches the log.
+	It("reports the GitHub App PEM as a length, never its value", func() {
+		const sentinel = "sentinel-github-app-pem-7c53"
+
+		var buffer bytes.Buffer
+		log.SetOutput(&buffer)
+		DeferCleanup(func() { log.SetOutput(os.Stderr) })
+
+		app := &application{GitHubAppPEM: sentinel}
+		Expect(argument.Print(context.Background(), app)).To(Succeed())
+
+		output := buffer.String()
+		Expect(output).To(ContainSubstring("GitHubAppPEM"))
+		Expect(output).To(ContainSubstring(
+			fmt.Sprintf("GitHubAppPEM length %d", len(sentinel)),
+		))
+		Expect(output).NotTo(ContainSubstring(sentinel))
+	})
+
 	// Either bag can carry a credential: buildClaudeEnv sources
 	// ANTHROPIC_AUTH_TOKEN from CLAUDE_ENV when its dedicated field is empty.
 	// The second bag deliberately uses a key name no marker heuristic would
@@ -285,6 +306,30 @@ var _ = Describe("application.buildClaudeEnv", func() {
 			"GATEWAY_SECRET": "from-field",
 			"FOO":            "bar",
 		}))
+	})
+
+	// The same gap, closed the same way. The pod's own environment carries the
+	// GitHub App triple, but the library's allowlist drops it before the child
+	// starts, so the `git` a worker runs would invoke the credential helper
+	// against an environment holding none of the three — and the helper fails
+	// loudly with "GITHUB_APP_ID is unset or empty". A pod that holds a credential
+	// is not yet a pod that can use it.
+	It("forwards the GitHub App vars to the Claude child", func() {
+		app := &application{
+			GitHubAppID:             "5252311",
+			GitHubAppInstallationID: "169648268",
+			GitHubAppPEM:            "sentinel-github-app-pem-7c53",
+		}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"GITHUB_APP_ID":              "5252311",
+			"GITHUB_APP_INSTALLATION_ID": "169648268",
+			"GITHUB_APP_PEM":             "sentinel-github-app-pem-7c53",
+		}))
+	})
+
+	It("omits the GitHub App vars when unset, leaving a laptop run unchanged", func() {
+		app := &application{ClaudeEnvRaw: "FOO=bar"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{"FOO": "bar"}))
 	})
 })
 
