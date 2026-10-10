@@ -96,6 +96,20 @@ type application struct {
 	AttentionStoreURL string `required:"false" arg:"attention-store-url" env:"POD_ATTENTION_STORE_URL" usage:"Attention store base URL forwarded to the Claude child"`
 	AttentionToken    string `required:"false" arg:"attention-token"     env:"POD_ATTENTION_TOKEN"     usage:"Attention store bearer token forwarded to the Claude child" display:"length"`
 
+	// GitHub App credential, forwarded to the Claude child for exactly the reason
+	// the attention-store pair above is: the library replaces the child
+	// environment with a fixed allowlist (HOME, PATH, USER, TZ, ZONEINFO, TMPDIR,
+	// LANG, LC_ALL), so a pod that holds the App is still not a child that can
+	// mint from it. Without this forwarding the `git` a worker runs sees none of
+	// the three, and `git-credential-github-app` fails with "GITHUB_APP_ID is
+	// unset or empty" — a push that cannot succeed, from a pod whose own
+	// environment plainly carries the credential. GITHUB_APP_PEM arrives from the
+	// pod environment (a secretRef), so no credential is ever a literal in a CR or
+	// manifest; display:"length" keeps its value out of the startup log.
+	GitHubAppID             string `required:"false" arg:"github-app-id"              env:"GITHUB_APP_ID"              usage:"GitHub App id forwarded to the Claude child"`
+	GitHubAppInstallationID string `required:"false" arg:"github-app-installation-id" env:"GITHUB_APP_INSTALLATION_ID" usage:"GitHub App installation id forwarded to the Claude child"`
+	GitHubAppPEM            string `required:"false" arg:"github-app-pem"             env:"GITHUB_APP_PEM"             usage:"GitHub App private key forwarded to the Claude child" display:"length"`
+
 	// Branch for Kafka result delivery
 	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
 
@@ -233,14 +247,15 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 
 // buildClaudeEnv assembles the environment passed to the Claude CLI process:
 // the ad-hoc CLAUDE_ENV pairs, with the three load-bearing Anthropic provider
-// vars and the two attention-store vars overriding the same keys. Both agent
-// shapes use it — the one-shot runner and the long-lived session take the same
-// config.
+// vars, the two attention-store vars and the three GitHub App vars overriding
+// the same keys. Both agent shapes use it — the one-shot runner and the
+// long-lived session take the same config.
 //
 // The returned map is handed to the runner as ClaudeRunnerConfig.Env, which the
 // library applies as its final layer over the child environment. That layer is
-// what lets a pod's Claude child see the attention store: the library otherwise
-// replaces the child env with a fixed allowlist.
+// what lets a pod's Claude child reach the attention store and mint a GitHub App
+// token: the library otherwise replaces the child env with a fixed allowlist
+// (HOME, PATH, USER, TZ, ZONEINFO, TMPDIR, LANG, LC_ALL), which carries neither.
 func (a *application) buildClaudeEnv() map[string]string {
 	claudeEnv := a.ClaudeEnvRaw.Pairs()
 	if claudeEnv == nil {
@@ -260,6 +275,19 @@ func (a *application) buildClaudeEnv() map[string]string {
 	}
 	if a.AttentionToken != "" {
 		claudeEnv["POD_ATTENTION_TOKEN"] = a.AttentionToken
+	}
+	// The GitHub App triple rides the same final layer, and needs it for the same
+	// reason: the pod's own environment carries all three, but the library's
+	// allowlist drops them before the child starts, so the helper `git` invokes
+	// would otherwise see an empty environment and every push would fail.
+	if a.GitHubAppID != "" {
+		claudeEnv["GITHUB_APP_ID"] = a.GitHubAppID
+	}
+	if a.GitHubAppInstallationID != "" {
+		claudeEnv["GITHUB_APP_INSTALLATION_ID"] = a.GitHubAppInstallationID
+	}
+	if a.GitHubAppPEM != "" {
+		claudeEnv["GITHUB_APP_PEM"] = a.GitHubAppPEM
 	}
 	return claudeEnv
 }
