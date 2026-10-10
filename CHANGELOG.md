@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.17.1
 
 - fix: forward the GitHub App credential to the Claude CLI child, so a cluster worker can actually push — the pod's own environment carries `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PEM`, but `github.com/bborbe/agent` replaces the child environment with a fixed allowlist (`HOME`, `PATH`, `USER`, `TZ`, `ZONEINFO`, `TMPDIR`, `LANG`, `LC_ALL`), so none of the three reached the CLI or the `git` a worker runs, and `git-credential-github-app` failed with `GITHUB_APP_ID is unset or empty` — a push that could not succeed, from a pod whose own environment plainly held the credential. All three now ride `ClaudeRunnerConfig.Env`, the library's documented final layer over that allowlist and the same escape hatch the attention-store vars already use. `GITHUB_APP_PEM` is `display:"length"`, so the startup log names the field and reports its length but never the key.
 
