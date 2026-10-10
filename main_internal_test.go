@@ -168,6 +168,24 @@ var _ = Describe("application startup argument log", func() {
 		Expect(output).NotTo(ContainSubstring(sentinel))
 	})
 
+	It("renders GatewaySecret as a length, never its value", func() {
+		const sentinel = "sentinel-gateway-secret-4f18"
+
+		var buffer bytes.Buffer
+		log.SetOutput(&buffer)
+		DeferCleanup(func() { log.SetOutput(os.Stderr) })
+
+		app := &application{GatewaySecret: sentinel}
+		Expect(argument.Print(context.Background(), app)).To(Succeed())
+
+		output := buffer.String()
+		Expect(output).To(ContainSubstring("GatewaySecret"))
+		Expect(output).To(ContainSubstring(
+			fmt.Sprintf("GatewaySecret length %d", len(sentinel)),
+		))
+		Expect(output).NotTo(ContainSubstring(sentinel))
+	})
+
 	// Either bag can carry a credential: buildClaudeEnv sources
 	// ANTHROPIC_AUTH_TOKEN from CLAUDE_ENV when its dedicated field is empty.
 	// The second bag deliberately uses a key name no marker heuristic would
@@ -244,6 +262,29 @@ var _ = Describe("application.buildClaudeEnv", func() {
 	It("omits the attention-store vars when unset, leaving a laptop run unchanged", func() {
 		app := &application{ClaudeEnvRaw: "FOO=bar"}
 		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{"FOO": "bar"}))
+	})
+
+	// The same allowlist gap as the attention-store pair above, with a sharper
+	// symptom: the vault service refuses every /api/v1/* request without
+	// X-Gateway-Secret, so a pod whose own env carries the secret still leaves its
+	// Claude child unable to read a vault file — and the refusal is a 401, which
+	// reads like a wrong secret rather than a missing forwarding.
+	It("forwards GATEWAY_SECRET to the Claude child", func() {
+		app := &application{GatewaySecret: "vault-gateway-secret"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"GATEWAY_SECRET": "vault-gateway-secret",
+		}))
+	})
+
+	It("lets the dedicated GatewaySecret field override the same key from CLAUDE_ENV", func() {
+		app := &application{
+			ClaudeEnvRaw:  "GATEWAY_SECRET=from-claude-env,FOO=bar",
+			GatewaySecret: "from-field",
+		}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"GATEWAY_SECRET": "from-field",
+			"FOO":            "bar",
+		}))
 	})
 })
 

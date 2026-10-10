@@ -96,6 +96,18 @@ type application struct {
 	AttentionStoreURL string `required:"false" arg:"attention-store-url" env:"POD_ATTENTION_STORE_URL" usage:"Attention store base URL forwarded to the Claude child"`
 	AttentionToken    string `required:"false" arg:"attention-token"     env:"POD_ATTENTION_TOKEN"     usage:"Attention store bearer token forwarded to the Claude child" display:"length"`
 
+	// GatewaySecret is the shared secret the deployed vault service (`git-rest`)
+	// requires in the `X-Gateway-Secret` header on every `/api/v1/*` request.
+	// Forwarded to the Claude child for exactly the reason the pair above is: the
+	// pod's own environment carries it, but the library replaces the child
+	// environment with a fixed allowlist, so without this forwarding the child
+	// cannot read or write a vault file at all — and the service answers `401`,
+	// which reads like a wrong secret rather than a missing forwarding, sending a
+	// worker to hunt for a credential the pod already holds. The value arrives from the
+	// pod environment (a secretRef), so no credential is ever a literal in a CR or
+	// manifest; `display:"length"` keeps it out of the startup log.
+	GatewaySecret string `required:"false" arg:"gateway-secret" env:"GATEWAY_SECRET" usage:"Shared secret for the vault service's X-Gateway-Secret header, forwarded to the Claude child" display:"length"`
+
 	// Branch for Kafka result delivery
 	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
 
@@ -260,6 +272,9 @@ func (a *application) buildClaudeEnv() map[string]string {
 	}
 	if a.AttentionToken != "" {
 		claudeEnv["POD_ATTENTION_TOKEN"] = a.AttentionToken
+	}
+	if a.GatewaySecret != "" {
+		claudeEnv["GATEWAY_SECRET"] = a.GatewaySecret
 	}
 	return claudeEnv
 }
