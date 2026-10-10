@@ -62,9 +62,23 @@ RUN chmod 0755 /usr/local/bin/git-credential-github-app
 # worker from modifying system config, so a worker cannot be asked to run
 # `git config` itself — and a worker that forgets to set anything up cannot
 # therefore operate unauthenticated-but-seemingly-fine.
-# `git` writes no credential here: /etc/gitconfig gains the helper's name only,
+#
+# ⚠️ The value is the helper's ABSOLUTE PATH, and that is load-bearing. `git`
+# prepends `git-credential-` to every value that is not an absolute path, so the
+# obvious-looking `git-credential-github-app` resolves to
+# `git-credential-git-credential-github-app` — a binary that does not exist. `git`
+# then warns, falls back to a username prompt, and a non-interactive push dies.
+# That is what shipped in v0.17.0, and the check that missed it read the stored
+# value back (`git config --get-all …helper` prints the name) instead of resolving
+# it, so it passed green against an unreachable helper. An absolute path is used
+# verbatim, so the trap cannot be re-entered by editing the name.
+# The `test -x` asserts the configured value really is an executable, so the image
+# cannot build at all if the helper is missing or misnamed.
+#
+# `git` writes no credential here: /etc/gitconfig gains the helper's path only,
 # and the token is minted per invocation and handed over on stdin/stdout.
-RUN git config --system credential.https://github.com.helper git-credential-github-app
+RUN git config --system credential.https://github.com.helper /usr/local/bin/git-credential-github-app \
+ && test -x "$(git config --get credential.https://github.com.helper)"
 ENV HOME=/home/claude
 RUN mkdir -p /home/claude/.claude
 ENV ZONEINFO=/zoneinfo.zip
