@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.17.2
 
 - fix: tell the worker to send the vault gateway headers — `git-rest` refuses every `/api/v1/*` request without `X-Gateway-Initator` (`500`) and `X-Gateway-Secret` (`401`), so the `## Vault` route added in v0.16.0 could not read or write a single file: the instruction said only to `curl` the service, and a pod that followed it saw `header 'X-Gateway-Initator' missing` and had no way to learn otherwise. `## Vault` now names both headers, records that the spelling `Initator` is deliberate, and states which refusal means what — including that a `401` is what a secret that never reached the process looks like, which is the likeliest cause and is not repairable from inside a task — plus that `/readiness` answering `200` beside a file call answering `401` is the expected split rather than a contradiction. `## Forbidden`'s no-exfiltration rule gains the single named exception that makes the route possible: that one header value goes to `vault-obsidian-personal:9090` and nowhere else. ⚠️ This instruction alone does not make the route work: `GATEWAY_SECRET` must also be forwarded into the Claude CLI child, because the library's fixed env allowlist drops it otherwise.
 
