@@ -5,6 +5,9 @@ cluster. Iterating on the A2A client/worker path — the Agent Card, `SendMessag
 follow-up turn on one conversation — costs a container restart here instead of an image
 publish, a mirror bump and a rollout.
 
+To drive the **deployed** worker instead of a local container — the same client/worker path
+through the cluster ingress — see [`cluster-a2a-run.md`](cluster-a2a-run.md).
+
 This is a **development** recipe. It is not how the service ships: the cluster pulls the
 mirrored image from the quant registry, and `make buca` is banned for this repo (see
 `CLAUDE.md` § Deploy).
@@ -177,3 +180,10 @@ let it attempt writes against an empty namespace instead of degrading.
 - **The startup log redacts the token** (`InteractiveAuthToken length 48`), but nothing else
   does. Never echo `INTERACTIVE_AUTH_TOKEN` or the router key into a shell transcript, a
   file, or a note.
+
+## Related
+
+- [`cluster-a2a-run.md`](cluster-a2a-run.md) — the same client/worker path against the
+  deployed `claude-interactive` worker in nuke dev: the real token, the cluster ingress, and
+  the pod-log verification. Same protocol facts, same traps; read it when you need the
+  deployed service rather than a local container.
