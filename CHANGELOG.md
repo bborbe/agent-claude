@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: sync golangci-lint to v2.14.0 and retire the standalone `errcheck`/`gosec` Make targets, so `make precommit` runs green on Go 1.27.2 and dark-factory's daemon preflight can start in this repo again — v2.13.1's bundled errcheck cannot read Go 1.27.2 export data (`export data version 5 is greater than maximum supported version 4`), so the `lint` target failed on the host toolchain; the standalone `errcheck@v1.20.0` and `gosec@v2.26.1` targets failed for the same reason, and golangci-lint already runs both linters, with the exclusions those targets carried still applied by the `std-error-handling` preset in `.golangci.yml`.
+
 ## v0.19.1
 
 - fix: make a pod's vault write a read-modify-write, because a write had no such protocol — the POST body was model-generated text, so a single write destroyed a vault task file: sections duplicated, one section replaced wholesale, and the file left truncated mid-sentence. `agent/.claude/CLAUDE.md` § Vault now defines a write as GET → modify a local copy → POST the whole file and states outright that a write replaces the whole file and that anything omitted is destroyed, and three helpers under `agent/scripts/` — `vault-read.sh`, `vault-write.sh` and `vault-set-section.sh` — make that protocol the easy path, the section helper touching exactly one named section and failing loudly on an ambiguous heading rather than guessing; `agent/scripts/vault-set-section_test.sh` is run only by hand and is not yet wired into `make precommit`.
