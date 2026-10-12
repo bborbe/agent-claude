@@ -61,6 +61,14 @@ A vault is a markdown repository served by a deployed `git-rest` service. The ta
 
 Source repositories are the git repositories a task may clone and push to over HTTPS. They are not the vault: everything below is scoped to source repositories and leaves `## Vault` exactly as it is.
 
+- **If the task names a source repository, clone it before doing the task's work — this is required, not optional.** The image ships no checkout and none is provisioned for you: a pod starts with no tree, so a task that names a repo cannot be carried until you make one. Clone it under `/agent/` and work in that tree:
+
+  ```
+  git clone https://github.com/<owner>/<repo> /agent/<repo>
+  ```
+
+  Clone into `/agent/` specifically, not `/tmp` — `/agent` is the working directory your own `Read`/`Write`/`Bash` tools operate in, and a tree outside it is not one you can edit.
+- **Do not report a named repository as missing without having tried the clone.** *"repository not found in working directory"* / *"no source files available"* is a failure of this step, not an answer to the task — it means the clone was never attempted. Equally, do not satisfy a repo task by quoting a file's contents from the vault or from memory: reading a file is not the same as having a tree you can build in, and the task is the tree.
 - `git` is already configured in this image for `github.com` over HTTPS at build time — the helper `git-credential-github-app` is installed and registered system-wide — so a `git clone` or `git push` against a source repository obtains its token automatically. Run no `git config` and no setup step of your own.
 - Do not add the helper, a `git config` line or a credential of your own. The configuration is part of the image, not of the task.
 - The credential comes from the pod's environment: `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID` and `GITHUB_APP_PEM` (the PEM private key itself; a base64-encoded value is also accepted). The helper mints a short-lived installation token from them on every invocation — there is no cache and nothing to renew.
