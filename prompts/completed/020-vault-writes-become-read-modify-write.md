@@ -1,6 +1,12 @@
 ---
-status: draft
+status: completed
+summary: 'Made vault writes read-modify-write by rewriting agent/.claude/CLAUDE.md § Vault and adding vault-read.sh, vault-write.sh, vault-set-section.sh and a fixture-driven splice test under agent/scripts/, with a fix: CHANGELOG entry.'
+execution_id: agent-claude-vault-write-exec-020-vault-writes-become-read-modify-write
+dark-factory-version: v0.196.0
 created: "2026-10-12T14:52:00Z"
+queued: "2026-10-12T15:16:31Z"
+started: "2026-10-12T15:22:45Z"
+completed: "2026-10-12T15:38:48Z"
 ---
 
 <!--
