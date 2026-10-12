@@ -120,7 +120,7 @@ type application struct {
 	// manifest; display:"length" keeps its value out of the startup log.
 	GitHubAppID             string `required:"false" arg:"github-app-id"              env:"GITHUB_APP_ID"              usage:"GitHub App id forwarded to the Claude child"`
 	GitHubAppInstallationID string `required:"false" arg:"github-app-installation-id" env:"GITHUB_APP_INSTALLATION_ID" usage:"GitHub App installation id forwarded to the Claude child"`
-	GitHubAppPEM            string `required:"false" arg:"github-app-pem"             env:"GITHUB_APP_PEM"             usage:"GitHub App private key forwarded to the Claude child"     display:"length"`
+	GitHubAppPEM            string `required:"false" arg:"github-app-pem"             env:"GITHUB_APP_PEM"             usage:"GitHub App private key forwarded to the Claude child" display:"length"`
 
 	// Branch for Kafka result delivery
 	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
