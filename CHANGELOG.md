@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.19.1
 
 - fix: make a pod's vault write a read-modify-write, because a write had no such protocol — the POST body was model-generated text, so a single write destroyed a vault task file: sections duplicated, one section replaced wholesale, and the file left truncated mid-sentence. `agent/.claude/CLAUDE.md` § Vault now defines a write as GET → modify a local copy → POST the whole file and states outright that a write replaces the whole file and that anything omitted is destroyed, and three helpers under `agent/scripts/` — `vault-read.sh`, `vault-write.sh` and `vault-set-section.sh` — make that protocol the easy path, the section helper touching exactly one named section and failing loudly on an ambiguous heading rather than guessing; `agent/scripts/vault-set-section_test.sh` is run only by hand and is not yet wired into `make precommit`.
 
