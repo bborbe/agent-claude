@@ -65,7 +65,7 @@ endif
 test:
 	go test -mod=mod -p=$${GO_TEST_PARALLEL:-1} -cover $(TESTFLAGS_RACE) $(shell go list -mod=mod ./... | grep -v /vendor/)
 
-check: lint vet errcheck vulncheck osv-scanner gosec trivy
+check: lint vet vulncheck osv-scanner trivy
 
 lint:
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run --allow-parallel-runners --config .golangci.yml ./...
@@ -73,17 +73,17 @@ lint:
 vet:
 	go vet -mod=mod $(shell go list -mod=mod ./... | grep -v /vendor/)
 
-errcheck:
-	GODEBUG=gotypesalias=1 go run github.com/kisielk/errcheck@$(ERRCHECK_VERSION) -ignore '(Close|Write|Fprint)' $(shell go list -mod=mod ./... | grep -v /vendor/ | grep -v k8s/client)
+# NOTE: no standalone `errcheck:` or `gosec:` target, and neither appears in the
+# `check:` list above — golangci-lint runs both. A standalone target dies on Go
+# 1.27.2 export data (version 5 > the maximum v1.20.0 errcheck can read), while
+# golangci-lint >= v2.14.0 bundles an errcheck that can. See
+# ~/Documents/workspaces/coding/docs/go-tools-versioning-guide.md.
+# The exclusions those targets carried are still applied: `-ignore '(Close|Write|Fprint)'`
+# by the `std-error-handling` preset in .golangci.yml's `exclusions.presets`, and
+# `-exclude=G104` is moot because no unchecked-error finding exists for gosec to raise.
 
-# ⚠️ The 13 advisories below are every one of them fixed by Go 1.27.2 — and Go
-# 1.27.2 is NOT adoptable in this repo. It breaks `errcheck` ("package sort
-# without types was imported", export data version 5 > maximum supported 4) and
-# needs golangci-lint >= v2.14.0. `errcheck` v1.20.0 is the newest release, so no
-# version can read 1.27.2 export data and the check chain cannot move. Unfixable
-# here for now, which is the category this list exists for.
-# ⚠️ Five of them (6603, 6610, 6611, 6612, 6617) ALSO carry a `golang.org/x/net`
-# line, and x/net IS bumped to v0.60.0 in the same change — a library bump that
+# ⚠️ Five of the advisories below (6603, 6610, 6611, 6612, 6617) ALSO carry a
+# `golang.org/x/net` line, and x/net IS bumped to v0.60.0 — a library bump that
 # does not touch the toolchain. That retires them for osv-scanner and trivy, which
 # read the module graph; it does NOT retire them here, because govulncheck reports
 # each of the five against the 1.27.1 stdlib as well. Removing them on the
@@ -92,8 +92,7 @@ errcheck:
 # inside it and are deliberately absent — govulncheck does not report them against
 # this module's graph, and suppressing an advisory that is not firing would hide a
 # finding that later becomes real.
-# Exit condition: drop these (and bump go.mod) once errcheck ships a
-# 1.27.2-compatible release.
+# Exit condition: drop these (and bump go.mod) once go.mod moves to 1.27.2.
 VULNCHECK_IGNORE ?= GO-2026-4923 GO-2026-4514 GO-2022-0470 GO-2026-4772 GO-2026-4771 GO-2026-5932 GO-2026-5064 GO-2026-5338 GO-2026-5622 GO-2026-6599 GO-2026-6600 GO-2026-6603 GO-2026-6604 GO-2026-6605 GO-2026-6607 GO-2026-6608 GO-2026-6609 GO-2026-6610 GO-2026-6611 GO-2026-6612 GO-2026-6613 GO-2026-6617
 
 .PHONY: vulncheck
@@ -123,9 +122,6 @@ osv-scanner:
 		echo "No config found, running default scan"; \
 		go run github.com/google/osv-scanner/v2/cmd/osv-scanner@$(OSV_SCANNER_VERSION) --recursive .; \
 	fi
-
-gosec:
-	go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -exclude=G104 ./...
 
 .PHONY: trivy
 trivy:
