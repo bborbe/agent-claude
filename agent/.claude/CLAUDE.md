@@ -39,6 +39,21 @@ Headless task execution agent running in a container.
 
 A vault is a markdown repository served by a deployed `git-rest` service. The task names the vault it needs.
 
+**A write REPLACES the whole file. Anything omitted from the body is destroyed.** The body must therefore never be authored from memory — it must be the bytes of a local file that was read from, or derived from, the file's current content. A body written from memory silently drops every part of the file the model did not think to reproduce, and the service has no way to tell a deliberate truncation from a mistake.
+
+**Every vault write is a read-modify-write, in this order:**
+
+1. **GET** the file first — `GET /api/v1/files/<path>` — and keep the result as a local file.
+2. **Modify the local copy** — never the response body in flight, and never a reconstruction from memory.
+3. **POST the WHOLE file back** — `POST /api/v1/files/<path>`, `Content-Type: application/octet-stream`, the entire local file as the body.
+
+Step 3 sends the complete document, so the local file must be the full current content plus your change — not the change alone.
+
+- **Use the helper scripts.** A script in `scripts/` is the API (`## Tools`), and hand-rolled `curl` calls are what this section exists to replace. These three are how the read-modify-write above is done:
+  - `scripts/vault-read.sh <repo-relative-path>` — GETs a file to stdout.
+  - `scripts/vault-write.sh <repo-relative-path> <local-file>` — POSTs a whole local file.
+  - `scripts/vault-set-section.sh <repo-relative-path> <heading> <content-file>` — GETs the file, replaces or appends exactly the one named section, and POSTs the result, leaving every other byte untouched.
+  - For a change confined to one section, `vault-set-section.sh` is the correct tool; `vault-write.sh` is for whole-file writes only.
 - Reach it over HTTP at `http://vault-obsidian-personal:9090` — the one internal host `## Forbidden` permits
 - **Every `/api/v1/*` request must carry two headers**, or the service refuses it before it touches the vault:
   - `X-Gateway-Initator: <any non-empty name>` — free-form caller identity, logged by the service on an auth failure. **The spelling is deliberate: `Initator`, not `Initiator` — do not "correct" it.**
@@ -49,7 +64,6 @@ A vault is a markdown repository served by a deployed `git-rest` service. The ta
   - Report the status and the body verbatim. Do not invent an initiator value beyond a plain name, do not try a different secret, and do not retry either one.
 - The probes `/healthz`, `/readiness` and `/metrics` take **no** headers by design — a `200` from `/readiness` next to a `401` from a file call is the expected split, not a contradiction, and it is the cheapest way to tell "the service is up but I am not authorised" from "the service is down".
 - **Read** a file: `GET /api/v1/files/<path>` — raw bytes in the body; URL-encode spaces (`%20`)
-- **Write** a file: `POST /api/v1/files/<path>` with `Content-Type: application/octet-stream` and the content as the body; nested directories are created for you
 - **List** files: `GET /api/v1/files/?glob=<pattern>` — a JSON array of paths. Single-level globs only; `**` is not supported
 - **Delete** a file: `DELETE /api/v1/files/<path>`
 - **The service owns git, not you.** It clones on startup, pulls periodically, and **commits and pushes on every write** — so `{"ok":true}` means written, committed and pushed, and the file is already on the vault's remote. Never run `git` against the vault and never resolve a conflict: the service does that, on the vault's own default branch. The gateway secret above is the only vault credential that exists, and it is the service's, not yours to hold beyond the header.
