@@ -2,7 +2,7 @@ include tools.env
 
 default: precommit
 
-precommit: ensure format generate python-check python-test test check addlicense
+precommit: ensure format generate python-check python-test shell-test test check addlicense
 	@echo "ready to commit"
 
 # The attention poster is vendored Python, and every other target in this file is Go —
@@ -11,6 +11,14 @@ precommit: ensure format generate python-check python-test test check addlicense
 # tries to raise a gate. `ast.parse` rather than `py_compile` so no `__pycache__` is
 # written into the tree.
 PYTHON_SCRIPTS = $(wildcard scripts/*.py)
+
+# The agent image's shell helpers are `agent/scripts/*.sh` — a different tree
+# from the repo-root `scripts/` above, so the glob is spelled out rather than
+# shared. Nothing ran them before this: `vault-set-section_test.sh` covered the
+# section splice but was invoked only by hand, and CHANGELOG v0.19.1 recorded
+# that gap. A helper whose exit code lies stays broken until something executes
+# it, which is what the process-level case in that suite exists to catch.
+SHELL_SCRIPTS = $(wildcard agent/scripts/*_test.sh)
 
 .PHONY: python-check
 python-check:
@@ -31,6 +39,17 @@ python-check:
 .PHONY: python-test
 python-test:
 	@PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -t scripts -p '*_test.py' -v
+
+.PHONY: shell-test
+shell-test:
+	@if [ -n "$(SHELL_SCRIPTS)" ]; then \
+		for f in $(SHELL_SCRIPTS); do \
+			echo "shell-test: $$f"; \
+			bash "$$f" || exit 1; \
+		done; \
+	else \
+		echo "shell-test: no agent/scripts/*_test.sh to run"; \
+	fi
 
 ensure:
 	go mod tidy
