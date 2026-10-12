@@ -25,7 +25,12 @@ FROM ${DOCKER_REGISTRY}/alpine:3.23 AS alpine
 # and the image shipped no tool that could sign one. This is the binary only:
 # no credential, no key, no token-minting script — the increment that wires the
 # credential is a separate change.
-RUN apk --no-cache add ca-certificates curl bash nodejs npm python3 git openssl \
+# `make`, `jq` and `util-linux` are the check prerequisites that are not Go: a
+# repo's own `make check` needs `make` to run at all, `vulncheck` pipes through
+# `jq`, and its failure path formats with `column` (util-linux — busybox has
+# none). `gcompat` is the glibc shim `trivy`'s release binary needs on musl; see
+# the toolchain block below. The Go toolchain and `trivy` are added there too.
+RUN apk --no-cache add ca-certificates curl bash nodejs npm python3 git openssl jq make util-linux gcompat \
  && npm install -g --omit=dev --no-optional @anthropic-ai/claude-code@2.1.286 \
  && npm cache clean --force \
  && apk del npm \
@@ -83,6 +88,48 @@ ENV HOME=/home/claude
 RUN mkdir -p /home/claude/.claude
 ENV ZONEINFO=/zoneinfo.zip
 COPY --from=build /usr/local/go/lib/time/zoneinfo.zip /
+
+# ── Source-repository build toolchain ─────────────────────────────────────────
+# A cluster worker asked to carry a repo task must be able to run that repo's OWN
+# `make check`. Every prerequisite except `trivy` is a `go run …` — lint, vet,
+# errcheck, vulncheck, osv-scanner, gosec — so with no Go toolchain the check
+# cannot run at all, and its failure is an ENVIRONMENT failure (`exit 127`,
+# `command not found`) rather than a finding. Removing that state is the point.
+#
+# ⚠️ `go` is COPIED from the build stage, NOT `apk add`-ed, and that is load-bearing.
+# The build stage is `golang:1.27.1`, and this repo's own `Makefile.precommit`
+# records 1.27.2 as **not adoptable here**: `errcheck` v1.20.0 — the newest release
+# — cannot read 1.27.2 export data, so the whole check chain stops. Copying the
+# build stage's toolchain makes the pod's Go the SAME version the binary is built
+# with, and makes that constraint impossible to drift past on an unrelated `apk`
+# bump. `GOTOOLCHAIN=local` stops Go downloading a different one at run time, which
+# would reintroduce exactly the version this pins away from.
+#
+# ⚠️ This is the SHARED image: every pod running `bborbe/agent-claude` gains this
+# toolchain, not only `claude-interactive`. It is additive — nothing is removed —
+# and it is the operator's own ruling (attention card
+# `551f0d37d721f1963523cd505de4fcd0`, 2026-10-12) to fix the class, not the instance.
+COPY --from=build /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOTOOLCHAIN=local
+
+# `trivy` is the one check prerequisite that is not a `go run` — the repo's `trivy`
+# target invokes the binary directly — and Alpine packages none, so it comes from
+# its own release tarball. Pinned: an unpinned fetch would let the scanner change
+# underneath a check whose result is recorded as evidence.
+# ⚠️ `Linux-64bit` is the amd64 asset; this image is built for that platform.
+# ⚠️ `trivy --version` runs at BUILD time on purpose. That binary is built against
+# glibc and this stage is musl, so the failure mode to catch is "installs fine,
+# cannot execute" — which would otherwise surface only when a pod first runs
+# `make check`, as an environment-caused non-zero exit that reads like a finding.
+# The `gcompat` package above is the shim for it; this assertion is what proves
+# the shim actually worked, and it fails the build loudly if it did not.
+ARG TRIVY_VERSION=0.75.0
+RUN curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+      | tar -xz -C /usr/local/bin trivy \
+ && test -x /usr/local/bin/trivy \
+ && trivy --version
+
 ENV BUILD_GIT_VERSION=${BUILD_GIT_VERSION}
 ENV BUILD_GIT_COMMIT=${BUILD_GIT_COMMIT}
 ENV BUILD_DATE=${BUILD_DATE}
