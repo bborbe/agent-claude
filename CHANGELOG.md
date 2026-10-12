@@ -6,11 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: make `agent/scripts/vault-set-section.sh` report success after a successful write, because the helper's exit code contradicted its own output — the `EXIT` trap was armed inside `main` with the two `mktemp` paths declared `local`, and an `EXIT` trap fires when the *script* exits, after `main` has returned and those locals are gone, so under `set -u` the trap's `"$tmp_src"` raised `tmp_src: unbound variable` and the process exited 1 *after* the POST had already succeeded and printed `{"ok":true}`, which meant a worker told to report the helper's result verbatim read a correct write as a failure and could retry or fall back to the hand-built whole-file POST this helper exists to replace, while the trap died before its `rm -f` and leaked both files on every invocation; the paths are now hoisted to script scope and removed by a `cleanup` function armed at top level, so cleanup runs on every exit path, and `agent/scripts/vault-set-section_test.sh` gains a process-level case that reproduces the false failure and is now run by `make precommit`, superseding the v0.19.1 note that recorded that suite as hand-run only.
+
 ## v0.19.2
 
 - fix: sync golangci-lint to v2.14.0 and retire the standalone `errcheck`/`gosec` Make targets, so `make precommit` runs green on Go 1.27.2 and dark-factory's daemon preflight can start in this repo again — v2.13.1's bundled errcheck cannot read Go 1.27.2 export data (`export data version 5 is greater than maximum supported version 4`), so the `lint` target failed on the host toolchain; the standalone `errcheck@v1.20.0` and `gosec@v2.26.1` targets failed for the same reason, and golangci-lint already runs both linters, with the exclusions those targets carried still applied by the `std-error-handling` preset in `.golangci.yml`.
-
-- fix: make `agent/scripts/vault-set-section.sh` report success after a successful write, because the helper's exit code contradicted its own output — the `EXIT` trap was armed inside `main` with the two `mktemp` paths declared `local`, and an `EXIT` trap fires when the *script* exits, after `main` has returned and those locals are gone, so under `set -u` the trap's `"$tmp_src"` raised `tmp_src: unbound variable` and the process exited 1 *after* the POST had already succeeded and printed `{"ok":true}`, which meant a worker told to report the helper's result verbatim read a correct write as a failure and could retry or fall back to the hand-built whole-file POST this helper exists to replace, while the trap died before its `rm -f` and leaked both files on every invocation; the paths are now hoisted to script scope and removed by a `cleanup` function armed at top level, so cleanup runs on every exit path, and `agent/scripts/vault-set-section_test.sh` gains a process-level case that reproduces the false failure and is now run by `make precommit`, superseding the v0.19.1 note that recorded that suite as hand-run only.
 
 ## v0.19.1
 
