@@ -126,4 +126,93 @@ else
   bad "idempotent: second splice yields the same file"
 fi
 
+# --- helper as a process: exit code, and cleanup on both exit paths ---------
+#
+# Every case above calls splice_section directly, so none of them reaches main's
+# exit path — and that is exactly where the defect lives. The EXIT trap fired
+# when the *script* exited, after main had returned and its `local` temp paths
+# had gone out of scope; under `set -u` the trap's `"$tmp_src"` raised `unbound
+# variable`, so a write that had already succeeded (the POST's `{"ok":true}` was
+# on stdout) still exited 1, and because the trap died before its `rm -f` both
+# mktemp files leaked. A sourcing test cannot reproduce it: the `set +e +u` above
+# disarms the trap's expansion, so the helper has to be run as its own process.
+mkdir -p "${tmp}/bin" "${tmp}/spill"
+
+printf '# Notes\n\nold body\n' > "${tmp}/remote.md"
+printf 'new body\n' > "${tmp}/content_proc.md"
+
+cat > "${tmp}/bin/curl" <<'STUB'
+#!/bin/bash
+# Stub curl — never touches the network. A POST prints the gateway's ok body
+# unless the failure marker exists; a GET cats the fixture, so the helper's
+# `curl … > "$tmp_src"` captures a real file to splice.
+is_post=0
+prev=""
+for a in "$@"; do
+  if [ "$prev" = "-X" ] && [ "$a" = "POST" ]; then is_post=1; fi
+  prev="$a"
+done
+if [ "$is_post" = "1" ]; then
+  if [ -e "${VAULT_TEST_FAIL_MARKER:?}" ]; then
+    exit 22
+  fi
+  printf '{"ok":true}'
+else
+  cat "${VAULT_TEST_REMOTE:?}"
+fi
+STUB
+chmod +x "${tmp}/bin/curl"
+
+export VAULT_TEST_REMOTE="${tmp}/remote.md"
+export VAULT_TEST_FAIL_MARKER="${tmp}/fail-post"
+
+# TMPDIR points at a private directory so the leak is actually measured: a bare
+# ${TMPDIR} is empty in a container that does not set it, which would make the
+# count 0 before and after and pass without observing anything.
+spill_count() {
+  local n=0 f
+  for f in "${tmp}"/spill/tmp.*; do
+    [ -e "$f" ] && n=$((n + 1))
+  done
+  printf '%s' "$n"
+}
+
+before="$(spill_count)"
+PATH="${tmp}/bin:${PATH}" GATEWAY_SECRET=dummy TMPDIR="${tmp}/spill" \
+  bash "${here}/vault-set-section.sh" 'notes/proc.md' '# Notes' "${tmp}/content_proc.md" \
+  > "${tmp}/proc_out.txt" 2> "${tmp}/proc_err.txt"
+rc=$?
+after="$(spill_count)"
+
+if [ "$rc" -eq 0 ] \
+  && grep -q '{"ok":true}' "${tmp}/proc_out.txt" \
+  && [ ! -s "${tmp}/proc_err.txt" ]; then
+  pass "process: successful write exits 0, prints the ok body, writes no stderr"
+else
+  bad "process: successful write exits 0, prints the ok body, writes no stderr (rc=${rc}, stderr=$(cat "${tmp}/proc_err.txt"))"
+fi
+
+if [ "$after" -eq "$before" ]; then
+  pass "process: no temporary files left behind on the success path"
+else
+  bad "process: no temporary files left behind on the success path (before=${before} after=${after})"
+fi
+
+# The shipped helper already cleans up on this path, because `set -e` exits from
+# inside main with its locals still live. Kept as a guard on the fix: a cleanup
+# moved to the end of main would satisfy the two checks above and leak here.
+: > "${tmp}/fail-post"
+before_fail="$(spill_count)"
+PATH="${tmp}/bin:${PATH}" GATEWAY_SECRET=dummy TMPDIR="${tmp}/spill" \
+  bash "${here}/vault-set-section.sh" 'notes/proc.md' '# Notes' "${tmp}/content_proc.md" \
+  > "${tmp}/fail_out.txt" 2> "${tmp}/fail_err.txt"
+rc_fail=$?
+after_fail="$(spill_count)"
+
+if [ "$rc_fail" -ne 0 ] && [ "$after_fail" -eq "$before_fail" ]; then
+  pass "process: no temporary files left behind on the failure path"
+else
+  bad "process: no temporary files left behind on the failure path (rc=${rc_fail} before=${before_fail} after=${after_fail})"
+fi
+
 exit "$fail"

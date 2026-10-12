@@ -5,6 +5,20 @@
 
 set -e -u -o pipefail
 
+# The two temporary paths live at script scope, not inside main, because an EXIT
+# trap fires when the *script* exits — after main has returned and its locals are
+# gone. Under `set -u` a trap reading a vanished `local` raises `unbound variable`
+# and turns a successful write into exit 1; it also skips the `rm -f`, leaking
+# both files. Hoisted here, the trap resolves them on every exit path.
+tmp_src=""
+tmp_out=""
+
+cleanup() {
+  rm -f "${tmp_src:-}" "${tmp_out:-}"
+}
+
+trap cleanup EXIT
+
 # splice_section <file> <heading> <content-file> — emit the spliced file to stdout.
 #
 # The heading is taken verbatim: a bare name is not promoted to a "## " heading,
@@ -87,11 +101,9 @@ main() {
   local initiator_header="X-Gateway-Initator: agent-claude"
   local secret_header="X-Gateway-Secret: $GATEWAY_SECRET"
   local base="http://vault-obsidian-personal:9090"
-  local tmp_src tmp_out
 
   tmp_src=$(mktemp)
   tmp_out=$(mktemp)
-  trap 'rm -f "$tmp_src" "$tmp_out"' EXIT
 
   curl -sf --max-time 30 \
     -H "$initiator_header" \
