@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: publish a permission gate raised by an A2A turn to the attention store as a `permission`-class item and block the turn until the operator answers it there, while a gate raised by a `/prompt` turn keeps resolving through the pod's own `/permission` route — `pkg/permission` adds a `Gate` that shells out to the already-installed `pod-attention.py` poster (so the store token is read from the pod's environment at decision time and never baked into the image) and a `Decider` that routes on `claudelib.PermissionRequest.Source` and hands every non-A2A request to the existing `interactive.PermissionRegistry` unchanged; every poster outcome — an unparsable response, a non-zero exit, a refusal and the 15-minute deadline — denies, so nothing on the A2A path resolves to allow without a verdict the poster read. `github.com/bborbe/agent` is bumped to v0.101.0 for `PermissionRequest.Source`.
+
 ## v0.19.2
 
 - fix: sync golangci-lint to v2.14.0 and retire the standalone `errcheck`/`gosec` Make targets, so `make precommit` runs green on Go 1.27.2 and dark-factory's daemon preflight can start in this repo again — v2.13.1's bundled errcheck cannot read Go 1.27.2 export data (`export data version 5 is greater than maximum supported version 4`), so the `lint` target failed on the host toolchain; the standalone `errcheck@v1.20.0` and `gosec@v2.26.1` targets failed for the same reason, and golangci-lint already runs both linters, with the exclusions those targets carried still applied by the `std-error-handling` preset in `.golangci.yml`.

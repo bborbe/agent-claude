@@ -42,6 +42,7 @@ import (
 	"github.com/bborbe/agent-claude/pkg/envbag"
 	"github.com/bborbe/agent-claude/pkg/factory"
 	heartbeat "github.com/bborbe/agent-claude/pkg/heartbeat"
+	"github.com/bborbe/agent-claude/pkg/permission"
 )
 
 // agentName is the identity string used for Prometheus metric grouping and logging.
@@ -348,6 +349,15 @@ func (a *application) runService(
 	// /permission route and answerable from outside the pod.
 	permissions := interactive.NewPermissionRegistry()
 
+	// A gate raised by an A2A turn is published to the attention store and answered
+	// there by the operator; every other request keeps resolving through the
+	// registry above, which is what the pod's own /permission route serves. The
+	// registry instance is unchanged and still shared with the endpoint.
+	decider := permission.NewDecider(
+		permissions,
+		permission.NewGate(permission.PosterPath, gateProducerID(a)),
+	)
+
 	// The clock is created once here and shared by the activity recorder and the
 	// heartbeat writer, so a session's activity and its entry's stamp come from the
 	// same source of time.
@@ -363,7 +373,7 @@ func (a *application) runService(
 			claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 			a.AnthropicModel,
 			claudeEnv,
-			permissions,
+			decider,
 		),
 		recorder,
 	)
@@ -383,6 +393,20 @@ func (a *application) runService(
 		return interactiveService.Run(ctx)
 	}
 	return run.CancelOnFirstFinish(ctx, publisher.Run, interactiveService.Run)
+}
+
+// gateProducerID is the producer a permission gate is posted to the attention
+// store under: the pod's own name, so the board attributes a gate to the worker
+// that raised it and two pods never share one producer. A pod always has a
+// hostname; the agent name is the fallback for the case where it does not, and the
+// service-mode guard has already established that the agent name is non-empty.
+func gateProducerID(a *application) string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		glog.Warningf("permission gate producer falls back to agent name: %v", err)
+		return a.A2AAgentName
+	}
+	return hostname
 }
 
 // newInteractiveService builds the interactive HTTP surface from the application's
