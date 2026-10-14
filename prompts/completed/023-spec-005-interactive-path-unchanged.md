@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [005-an-a2a-permission-gate-reaches-the-attention-store]
+summary: Proved the interactive /prompt permission path is unchanged by the A2A gate (registry-only routing, no poster invocation, /permission still serving) and documented the attention store's contract in docs/attention-store.md, with README link and CHANGELOG entries.
+execution_id: agent-claude-permgate-exec-023-spec-005-interactive-path-unchanged
+dark-factory-version: v0.198.7
 created: "2026-10-14T19:44:38Z"
 queued: "2026-10-14T20:22:06Z"
+started: "2026-10-14T20:29:26Z"
+completed: "2026-10-14T20:35:47Z"
 branch: dark-factory/an-a2a-permission-gate-reaches-the-attention-store
 ---
 
