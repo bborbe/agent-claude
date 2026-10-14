@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.20.0
 
 - feat: publish a permission gate raised by an A2A turn to the attention store as a `permission`-class item and block the turn until the operator answers it there, while a gate raised by a `/prompt` turn keeps resolving through the pod's own `/permission` route — `pkg/permission` adds a `Gate` that shells out to the already-installed `pod-attention.py` poster (so the store token is read from the pod's environment at decision time and never baked into the image) and a `Decider` that routes on `claudelib.PermissionRequest.Source` and hands every non-A2A request to the existing `interactive.PermissionRegistry` unchanged; every poster outcome — an unparsable response, a non-zero exit, a refusal and the 15-minute deadline — denies, so nothing on the A2A path resolves to allow without a verdict the poster read. `github.com/bborbe/agent` is bumped to v0.101.0 for `PermissionRequest.Source`.
 
