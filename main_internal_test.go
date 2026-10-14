@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
+	claudelib "github.com/bborbe/agent/claude"
 	interactive "github.com/bborbe/agent/interactive"
 	agentmocks "github.com/bborbe/agent/mocks"
 	"github.com/bborbe/argument/v2"
@@ -454,6 +455,61 @@ var _ = Describe("application.newInteractiveService", func() {
 		}
 		Expect(json.Unmarshal(recorder.Body.Bytes(), &card)).To(Succeed())
 		Expect(card.Name).To(Equal("claude-interactive"))
+	})
+
+	// The interactive path's own route, served end to end. The A2A gate routes a
+	// request raised by an /a2a turn to the store; a request raised by a /prompt
+	// turn must still appear here and be answerable here. This spec drives the real
+	// registry the service was built with, so it fails if the service stops serving
+	// the route or starts reading a gate off the store instead.
+	It("serves a /prompt-raised gate on GET /permission", func() {
+		app := &application{
+			Listen:               "127.0.0.1:0",
+			ProviderBaseURL:      "http://provider.example.test",
+			InteractiveAuthToken: "test-token",
+			A2APublicURL:         "https://agent.example.test/a2a",
+			A2AAgentName:         "claude-interactive",
+			// Set so the "body carries no store URL" assertion below has teeth: with
+			// the field left empty, a body that leaked the store URL would leak an
+			// empty string and the assertion could never fail.
+			AttentionStoreURL: "https://store.example.test",
+		}
+		registry := interactive.NewPermissionRegistry()
+		service := app.newInteractiveService(
+			&agentmocks.SessionFactory{},
+			prometheus.NewRegistry(),
+			registry,
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+		go func() {
+			_, _ = registry.DecidePermission(ctx, claudelib.PermissionRequest{
+				ToolName:    "Bash",
+				Description: "run a command",
+				Source:      claudelib.PromptPermissionSource,
+			})
+		}()
+
+		Eventually(registry.List).Should(HaveLen(1))
+		pendingID := registry.List()[0].ID
+
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/permission", nil)
+		// /permission is gated: readiness, metrics and the Agent Card are the only
+		// exempt routes, so this spec sends the token the service was built with.
+		request.Header.Set("Authorization", "Bearer test-token")
+		service.Handler().ServeHTTP(recorder, request)
+
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		var pending []interactive.PendingPermission
+		Expect(json.Unmarshal(recorder.Body.Bytes(), &pending)).To(Succeed())
+		Expect(pending).To(HaveLen(1))
+		Expect(pending[0].ID).To(Equal(pendingID))
+		Expect(pending[0].ToolName).To(Equal("Bash"))
+		// The route answers from the registry, not the store: a body naming the store
+		// would mean the pod had gone looking for a gate somewhere it cannot reach.
+		Expect(recorder.Body.String()).NotTo(ContainSubstring("store.example.test"))
 	})
 })
 

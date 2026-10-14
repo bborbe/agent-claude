@@ -42,6 +42,14 @@ route except readiness, metrics and the Agent Card requires `Authorization: Bear
 service pod with no `INTERACTIVE_AUTH_TOKEN`, no `A2A_PUBLIC_URL` or no `A2A_AGENT_NAME` fails to
 start.
 
+The permission endpoint serves the requests that did **not** come from an A2A turn. A permission
+gate raised by an A2A turn is published to the attention store as a `permission`-class item and
+answered there by the operator, and the turn blocks until that verdict arrives — an unanswered gate
+denies at its deadline rather than being released. A gate raised by a `/prompt` turn still appears
+on the pod's own `GET /permission` route and is answered by a `POST /permission` verdict.
+The attention store's contract — classes, the `permission` release rule and its read
+surfaces — is documented in [docs/attention-store.md](docs/attention-store.md).
+
 ### Cluster heartbeat
 
 A service agent publishes its own liveness so the fleet's cluster liveness reader can see it. Every
