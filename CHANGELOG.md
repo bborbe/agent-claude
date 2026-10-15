@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.20.1
 
 - fix: **re-vendor `pod-attention.py` from `bborbe/claude-supervisor` v0.152.3, so a gate this image posts is not pruned before the operator can see it.** The vendored copy still declared `liveness_ref: session:<producer-id>`, and the attention store resolves `session:` against its **own host's** registry `~/.claude/sessions` — a directory a container's session id can never appear in. The store therefore classified the card as a dead asker's and removed it on the first list read: `pkg/permission`'s `Gate` shelled out, read a `201` and an item id, and then polled a `404` until the 15-minute deadline and denied. The failure was silent in the direction that matters — the deny is the poster's fail-open path, so the gate failed *safe* while never reaching an operator at all. Upstream moved the default to `owner:` and, because `owner:` is exempt from that same prune, paired it with an `expires_at` bound (the gate's own `--timeout` for `gate`, a TTL for `ask`); the two are one change and this image needs both. ⚠️ The copy is vendored **verbatim and is not a link** — `Dockerfile:55` `COPY`s it into `/usr/local/bin/` — so it must be re-vendored on every upstream change, which is what this commit does. Verified byte-identical: `shasum -a 256 scripts/pod-attention.py` prints `806f2fe1fbd9b3f377f97d8ee64fbfca9d376950e1c0424ff31ee0079967efde`, equal to `git show v0.152.3:scripts/pod-attention.py` in `bborbe/claude-supervisor`. Change set: `scripts/pod-attention.py`, `CHANGELOG.md`.
 
