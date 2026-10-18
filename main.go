@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	a2apush "github.com/a2aproject/a2a-go/v2/a2asrv/push"
 	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
 	delivery "github.com/bborbe/agent/delivery"
@@ -413,11 +414,31 @@ func gateProducerID(a *application) string {
 // configuration. The card's name and URL travel together in one struct, and which values
 // fill the card's Name and PublicURL fields is checked by a spec that serves the Agent
 // Card rather than by the compiler.
+//
+// The A2A push-notification store and sender are built here, in this repository, rather
+// than inside the library: the A2A protocol puts the registration on the agent's own
+// endpoint, so the worker holds its own per-task registrations, and building them here is
+// what makes a2a-go a direct dependency of this module. The library derives both the Agent
+// Card's pushNotifications capability and the handler's push wiring from the one option
+// carrying them, so the card can never advertise a channel that is not wired.
 func (a *application) newInteractiveService(
 	sessions agentlib.SessionFactory,
 	registry *prometheus.Registry,
 	permissions interactive.PermissionRegistry,
 ) interactive.Service {
+	store := a2apush.NewInMemoryStore()
+	// AllowPrivateNetworks is mandatory, not a preference. The SDK's sender refuses
+	// loopback, private, link-local and unspecified targets by default, and the callback
+	// the spawner registers is exactly such an address: a container reaches the Mac host
+	// through the Docker gateway, which is private. Without the opt-out every push is
+	// refused, the refusal is logged only (FailOnError stays at its false default, so a
+	// failing push never cancels the turn), and the channel is silently inert while
+	// looking deployed. The opt-out relaxes the resolved-IP range check alone — the
+	// sender's redirect cap and cross-host token stripping still apply, and its Timeout
+	// stays unset so its own 30-second default governs.
+	sender := a2apush.NewHTTPPushSender(&a2apush.HTTPSenderConfig{
+		AllowPrivateNetworks: true,
+	})
 	return interactive.NewServiceWithPermissions(
 		sessions,
 		a.Listen,
@@ -431,6 +452,7 @@ func (a *application) newInteractiveService(
 		permissions,
 		interactive.DefaultSessionIdleTimeout,
 		interactive.DefaultMaxSessions,
+		interactive.WithPushNotifications(store, sender),
 	)
 }
 
