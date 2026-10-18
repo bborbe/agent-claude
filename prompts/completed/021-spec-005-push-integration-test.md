@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [005-a2a-worker-status-push]
+summary: 'Added main_a2a_push_internal_test.go: an in-process A2A push integration test driving the worker''s real newInteractiveService, real push store and real HTTP sender against a loopback receiver (5 sender-level specs plus one ~35s end-to-end turn spec), and raised the main_test.go suite ceiling to 5 minutes.'
+execution_id: agent-claude-exec-021-spec-005-push-integration-test
+dark-factory-version: v0.198.7
 created: "2026-10-17T16:04:54Z"
 queued: "2026-10-18T08:34:50Z"
+started: "2026-10-18T09:13:30Z"
+completed: "2026-10-18T09:35:48Z"
 ---
 
 <!--
