@@ -154,6 +154,19 @@ The vault's A2A MCP client (`.claude/scripts/a2a-mcp.py`) drives the same path t
 `a2a_send(text, context_id=…)` tool; point `A2A_BASE_URL` at `http://localhost:9091` and set
 `A2A_TOKEN` to the local `INTERACTIVE_AUTH_TOKEN`.
 
+### Push notifications
+
+The card advertises `capabilities.pushNotifications: true`, and the `/a2a` endpoint accepts a
+per-task registration via `CreateTaskPushNotificationConfig` (legacy name
+`tasks/pushNotificationConfig/set`). The task must already exist — register after the first
+`SendMessage` has created it, or the handler refuses with `TASK_NOT_FOUND`. Every task event is
+POSTed to the registered URL as the A2A stream-response envelope, with the registered token in the
+`A2A-Notification-Token` header and never in the body. The callback has to be a private-network
+address — that is the point of the local arm, where the container reaches the host through the
+Docker gateway — and the sender is therefore built with `AllowPrivateNetworks: true`; the SDK's
+default guard would refuse `host.docker.internal`. A failing push is logged and swallowed and never
+fails the turn, and one mid-turn working-state update is emitted per turn.
+
 ## The cluster heartbeat is already a no-op locally
 
 There is no `claude-worker-heartbeats` ConfigMap and no service-account mount in a local

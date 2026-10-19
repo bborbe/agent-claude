@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
+	claudelib "github.com/bborbe/agent/claude"
 	interactive "github.com/bborbe/agent/interactive"
 	agentmocks "github.com/bborbe/agent/mocks"
 	"github.com/bborbe/argument/v2"
@@ -449,11 +450,146 @@ var _ = Describe("application.newInteractiveService", func() {
 		Expect(recorder.Body.String()).NotTo(ContainSubstring("provider.example.test"))
 		Expect(recorder.Body.String()).NotTo(ContainSubstring("127.0.0.1"))
 
+		// The capability is asserted as a parsed field, not as a substring: the
+		// field's zero value marshals into the body as "pushNotifications":false,
+		// so a substring check would pass on a service whose push is unwired.
 		var card struct {
-			Name string `json:"name"`
+			Name         string `json:"name"`
+			Capabilities struct {
+				PushNotifications bool `json:"pushNotifications"`
+			} `json:"capabilities"`
 		}
 		Expect(json.Unmarshal(recorder.Body.Bytes(), &card)).To(Succeed())
 		Expect(card.Name).To(Equal("claude-interactive"))
+		Expect(card.Capabilities.PushNotifications).To(BeTrue())
+	})
+
+	// The capability follows the wiring rather than being configured separately, so a
+	// service built with the push configuration left unset — no option at all, which is
+	// the state this repository was in before the wiring landed — must both advertise
+	// nothing and refuse a registration. Asserting only the card would let a hardcoded
+	// capability pass; asserting only the refusal would let a service that refuses
+	// everything pass. The refusal must carry the SDK's own push-not-supported reason:
+	// a registration naming an unknown task is refused anyway, with TASK_NOT_FOUND
+	// (-32001), so "an error came back" is not the property under test.
+	It("advertises no push and refuses a registration when built without the wiring", func() {
+		service := interactive.NewServiceWithPermissions(
+			&agentmocks.SessionFactory{},
+			"127.0.0.1:0",
+			"http://provider.example.test",
+			prometheus.NewRegistry(),
+			interactive.NewAuthToken("test-token"),
+			interactive.CardConfig{
+				Name:      "claude-interactive",
+				PublicURL: "https://agent.example.test/a2a",
+			},
+			interactive.NewPermissionRegistry(),
+			interactive.DefaultSessionIdleTimeout,
+			interactive.DefaultMaxSessions,
+		)
+
+		cardRecorder := httptest.NewRecorder()
+		service.Handler().ServeHTTP(
+			cardRecorder,
+			httptest.NewRequest(http.MethodGet, "/.well-known/agent-card.json", nil),
+		)
+		Expect(cardRecorder.Code).To(Equal(http.StatusOK))
+		var card struct {
+			Capabilities struct {
+				PushNotifications bool `json:"pushNotifications"`
+			} `json:"capabilities"`
+		}
+		Expect(json.Unmarshal(cardRecorder.Body.Bytes(), &card)).To(Succeed())
+		Expect(card.Capabilities.PushNotifications).To(BeFalse())
+
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/a2a",
+			bytes.NewBufferString(
+				`{"jsonrpc":"2.0","id":1,"method":"CreateTaskPushNotificationConfig",`+
+					`"params":{"taskId":"unknown-task","url":"http://127.0.0.1:1/push",`+
+					`"token":"tok"}}`,
+			),
+		)
+		request.Header.Set("Content-Type", "application/json")
+		// /a2a is gated: without the bearer token the gate answers 401 before the
+		// handler runs, and the assertion below would pass for the wrong reason.
+		request.Header.Set("Authorization", "Bearer test-token")
+		service.Handler().ServeHTTP(recorder, request)
+
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		var response struct {
+			Result json.RawMessage `json:"result"`
+			Error  *struct {
+				Code    int             `json:"code"`
+				Message string          `json:"message"`
+				Data    json.RawMessage `json:"data"`
+			} `json:"error"`
+		}
+		Expect(json.Unmarshal(recorder.Body.Bytes(), &response)).To(Succeed())
+		GinkgoWriter.Printf("refused registration body: %s", recorder.Body.String())
+		Expect(response.Result).To(BeEmpty())
+		Expect(response.Error).NotTo(BeNil())
+		Expect(response.Error.Code).To(Equal(-32003))
+		// -32003 is the SDK's push-not-supported code; the reason string it carries
+		// alongside it is what distinguishes this refusal from the task-not-found one.
+		Expect(string(response.Error.Data)).To(ContainSubstring("PUSH_NOTIFICATION_NOT_SUPPORTED"))
+	})
+
+	// The interactive path's own route, served end to end. The A2A gate routes a
+	// request raised by an /a2a turn to the store; a request raised by a /prompt
+	// turn must still appear here and be answerable here. This spec drives the real
+	// registry the service was built with, so it fails if the service stops serving
+	// the route or starts reading a gate off the store instead.
+	It("serves a /prompt-raised gate on GET /permission", func() {
+		app := &application{
+			Listen:               "127.0.0.1:0",
+			ProviderBaseURL:      "http://provider.example.test",
+			InteractiveAuthToken: "test-token",
+			A2APublicURL:         "https://agent.example.test/a2a",
+			A2AAgentName:         "claude-interactive",
+			// Set so the "body carries no store URL" assertion below has teeth: with
+			// the field left empty, a body that leaked the store URL would leak an
+			// empty string and the assertion could never fail.
+			AttentionStoreURL: "https://store.example.test",
+		}
+		registry := interactive.NewPermissionRegistry()
+		service := app.newInteractiveService(
+			&agentmocks.SessionFactory{},
+			prometheus.NewRegistry(),
+			registry,
+		)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+		go func() {
+			_, _ = registry.DecidePermission(ctx, claudelib.PermissionRequest{
+				ToolName:    "Bash",
+				Description: "run a command",
+				Source:      claudelib.PromptPermissionSource,
+			})
+		}()
+
+		Eventually(registry.List).Should(HaveLen(1))
+		pendingID := registry.List()[0].ID
+
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/permission", nil)
+		// /permission is gated: readiness, metrics and the Agent Card are the only
+		// exempt routes, so this spec sends the token the service was built with.
+		request.Header.Set("Authorization", "Bearer test-token")
+		service.Handler().ServeHTTP(recorder, request)
+
+		Expect(recorder.Code).To(Equal(http.StatusOK))
+		var pending []interactive.PendingPermission
+		Expect(json.Unmarshal(recorder.Body.Bytes(), &pending)).To(Succeed())
+		Expect(pending).To(HaveLen(1))
+		Expect(pending[0].ID).To(Equal(pendingID))
+		Expect(pending[0].ToolName).To(Equal("Bash"))
+		// The route answers from the registry, not the store: a body naming the store
+		// would mean the pod had gone looking for a gate somewhere it cannot reach.
+		Expect(recorder.Body.String()).NotTo(ContainSubstring("store.example.test"))
 	})
 })
 

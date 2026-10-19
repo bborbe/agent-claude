@@ -27,6 +27,8 @@ func TestSuite(t *testing.T) {
 	format.TruncatedDiff = false
 	RegisterFailHandler(Fail)
 	suiteConfig, reporterConfig := GinkgoConfiguration()
-	suiteConfig.Timeout = 60 * time.Second
+	// A spec that runs a deliberately long turn (~35s) must not be aborted mid-turn by
+	// the suite ceiling and reported as a timeout instead of as its real assertion.
+	suiteConfig.Timeout = 5 * time.Minute
 	RunSpecs(t, "Main Suite", suiteConfig, reporterConfig)
 }

@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	a2apush "github.com/a2aproject/a2a-go/v2/a2asrv/push"
 	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
 	delivery "github.com/bborbe/agent/delivery"
@@ -42,6 +43,7 @@ import (
 	"github.com/bborbe/agent-claude/pkg/envbag"
 	"github.com/bborbe/agent-claude/pkg/factory"
 	heartbeat "github.com/bborbe/agent-claude/pkg/heartbeat"
+	"github.com/bborbe/agent-claude/pkg/permission"
 )
 
 // agentName is the identity string used for Prometheus metric grouping and logging.
@@ -348,6 +350,15 @@ func (a *application) runService(
 	// /permission route and answerable from outside the pod.
 	permissions := interactive.NewPermissionRegistry()
 
+	// A gate raised by an A2A turn is published to the attention store and answered
+	// there by the operator; every other request keeps resolving through the
+	// registry above, which is what the pod's own /permission route serves. The
+	// registry instance is unchanged and still shared with the endpoint.
+	decider := permission.NewDecider(
+		permissions,
+		permission.NewGate(permission.PosterPath, gateProducerID(a)),
+	)
+
 	// The clock is created once here and shared by the activity recorder and the
 	// heartbeat writer, so a session's activity and its entry's stamp come from the
 	// same source of time.
@@ -363,7 +374,7 @@ func (a *application) runService(
 			claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 			a.AnthropicModel,
 			claudeEnv,
-			permissions,
+			decider,
 		),
 		recorder,
 	)
@@ -385,15 +396,49 @@ func (a *application) runService(
 	return run.CancelOnFirstFinish(ctx, publisher.Run, interactiveService.Run)
 }
 
+// gateProducerID is the producer a permission gate is posted to the attention
+// store under: the pod's own name, so the board attributes a gate to the worker
+// that raised it and two pods never share one producer. A pod always has a
+// hostname; the agent name is the fallback for the case where it does not, and the
+// service-mode guard has already established that the agent name is non-empty.
+func gateProducerID(a *application) string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		glog.Warningf("permission gate producer falls back to agent name: %v", err)
+		return a.A2AAgentName
+	}
+	return hostname
+}
+
 // newInteractiveService builds the interactive HTTP surface from the application's
 // configuration. The card's name and URL travel together in one struct, and which values
 // fill the card's Name and PublicURL fields is checked by a spec that serves the Agent
 // Card rather than by the compiler.
+//
+// The A2A push-notification store and sender are built here, in this repository, rather
+// than inside the library: the A2A protocol puts the registration on the agent's own
+// endpoint, so the worker holds its own per-task registrations, and building them here is
+// what makes a2a-go a direct dependency of this module. The library derives both the Agent
+// Card's pushNotifications capability and the handler's push wiring from the one option
+// carrying them, so the card can never advertise a channel that is not wired.
 func (a *application) newInteractiveService(
 	sessions agentlib.SessionFactory,
 	registry *prometheus.Registry,
 	permissions interactive.PermissionRegistry,
 ) interactive.Service {
+	store := a2apush.NewInMemoryStore()
+	// AllowPrivateNetworks is mandatory, not a preference. The SDK's sender refuses
+	// loopback, private, link-local and unspecified targets by default, and the callback
+	// the spawner registers is exactly such an address: a container reaches the Mac host
+	// through the Docker gateway, which is private. Without the opt-out every push is
+	// refused, the refusal is logged only (FailOnError stays at its false default, so a
+	// failing push never cancels the turn), and the channel is silently inert while
+	// looking deployed. The opt-out relaxes the resolved-IP range check alone — the
+	// sender's redirect cap and cross-host token stripping still apply, and its Timeout
+	// stays unset so its own 30-second default governs.
+	sender := a2apush.NewHTTPPushSender(&a2apush.HTTPSenderConfig{
+		AllowPrivateNetworks: true,
+	})
 	return interactive.NewServiceWithPermissions(
 		sessions,
 		a.Listen,
@@ -407,6 +452,7 @@ func (a *application) newInteractiveService(
 		permissions,
 		interactive.DefaultSessionIdleTimeout,
 		interactive.DefaultMaxSessions,
+		interactive.WithPushNotifications(store, sender),
 	)
 }
 

@@ -42,6 +42,36 @@ route except readiness, metrics and the Agent Card requires `Authorization: Bear
 service pod with no `INTERACTIVE_AUTH_TOKEN`, no `A2A_PUBLIC_URL` or no `A2A_AGENT_NAME` fails to
 start.
 
+The permission endpoint serves the requests that did **not** come from an A2A turn. A permission
+gate raised by an A2A turn is published to the attention store as a `permission`-class item and
+answered there by the operator, and the turn blocks until that verdict arrives — an unanswered gate
+denies at its deadline rather than being released. A gate raised by a `/prompt` turn still appears
+on the pod's own `GET /permission` route and is answered by a `POST /permission` verdict.
+The attention store's contract — classes, the `permission` release rule and its read
+surfaces — is documented in [docs/attention-store.md](docs/attention-store.md).
+
+### A2A push notifications
+
+The A2A endpoint accepts a push-notification registration per task, and the Agent Card
+advertises `capabilities.pushNotifications: true` so a caller knows it may register one. The
+registration is created with the `CreateTaskPushNotificationConfig` JSON-RPC method (the protocol's
+legacy name for it is `tasks/pushNotificationConfig/set`) and requires the task to already exist:
+the handler refuses a registration naming a task its task store does not hold, so register after
+the turn's first `SendMessage` has created the task. Every task event of a registered task is
+POSTed to the registered URL as the A2A stream-response envelope, and the registered token travels
+as the `A2A-Notification-Token` header — never in the body and never in the log; a config that
+carries no token sends no header at all. The callback must be a private-network address, which is
+why the sender is built with `AllowPrivateNetworks: true`: a container reaches the host through the
+Docker gateway, and the SDK's default guard refuses exactly that range. A failing push is logged
+and swallowed and never fails the turn. While a turn runs, the service emits one mid-turn
+working-state status update per turn, so a caller learns the turn is alive without polling. The
+registration route is gated by the same bearer token as every other non-exempt route.
+
+The push store and sender are built in `main.go`'s `newInteractiveService` rather than inside the
+shared library, and the card's capability is derived from that one wiring rather than configured
+separately — a worker built without the wiring advertises no push and refuses a registration, so
+the capability can never be advertised without the machinery that honours it.
+
 ### Cluster heartbeat
 
 A service agent publishes its own liveness so the fleet's cluster liveness reader can see it. Every
