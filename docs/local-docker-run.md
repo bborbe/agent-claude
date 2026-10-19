@@ -200,3 +200,6 @@ let it attempt writes against an empty namespace instead of degrading.
   deployed `claude-interactive` worker in nuke dev: the real token, the cluster ingress, and
   the pod-log verification. Same protocol facts, same traps; read it when you need the
   deployed service rather than a local container.
+- [`publish-image.md`](publish-image.md) — turning a released tag into a pullable
+  `docker.io/bborbe/agent-claude:<tag>` image. Read it when the cluster needs an image that
+  does not exist yet; the local recipe above never publishes.
