@@ -72,7 +72,10 @@ set_status_completed() {
 }
 
 main() {
-  : "${GATEWAY_SECRET:?GATEWAY_SECRET is required}"
+  if [ -z "${GATEWAY_SECRET:-}" ]; then
+    echo "vault-complete.sh: GATEWAY_SECRET is required" >&2
+    exit 1
+  fi
 
   if [ "$#" -ne 1 ]; then
     echo "usage: vault-complete.sh <repo-relative-path>" >&2
