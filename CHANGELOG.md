@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.21.2
 
 - docs: add `docs/publish-image.md`, the procedure for turning a released tag into a pullable `docker.io/bborbe/agent-claude:<tag>` image. Every tag previously required a hand build by whoever happened to pick the work up, with no written step: `v0.17.1` was released at `2026-10-10T09:00:35Z` and still had no image at `15:44Z`, which held up the `claude-interactive` pin bump for about six hours. The page names the owner (the operator — agents get no Docker credentials), the `VERSION=<tag> make build upload` invocation from a detached worktree at the tag, the `check-version-tag` trap, and three registry-side verification commands. No behaviour change.
 
