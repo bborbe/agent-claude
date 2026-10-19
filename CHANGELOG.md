@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.21.1
 
 - chore: bump `github.com/bborbe/agent` to v0.103.1, so the terminal `TASK_STATE_COMPLETED` status-update event carries a `status.message` with a non-empty `messageId` instead of `nil`. The spawning supervisor's receiver already extracts `payload.status.message.messageId` when present (`claude-supervisor` `server/a2a-receive.mjs`), but with no message on the completion event its completion record carried none — the mid-turn working event was the only one that had one. The library change landed in `bborbe/agent` v0.103.1 (`interactive/a2a-handler.go:218` now passes `a2a.NewMessage(a2a.MessageRoleAgent, a2a.NewTextPart(completionStatusText))`); this repo only picks it up, so the change set is `go.mod` and `go.sum`.
 
