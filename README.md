@@ -134,7 +134,7 @@ Tune `ALLOWED_TOOLS` per task shape (minimum viable set):
 | Task shape | Minimum tools |
 |---|---|
 | Web research | `WebSearch,WebFetch,Read,Grep` |
-| Vault I/O via scripts | `Bash(scripts/vault-read.sh:*),Bash(scripts/vault-write.sh:*),Bash(scripts/vault-list.sh:*),Grep` |
+| Vault I/O via scripts | `Bash(scripts/vault-read.sh:*),Bash(scripts/vault-write.sh:*),Bash(scripts/vault-complete.sh:*),Bash(scripts/vault-list.sh:*),Grep` |
 | API query via script | `Bash(scripts/trading-api-read.sh:*),Grep` |
 | Code edit | `Read,Write,Edit,Grep,Glob,Bash(go:*),Bash(make:*)` |
 

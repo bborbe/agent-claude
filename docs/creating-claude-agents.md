@@ -67,7 +67,7 @@ Pick the **minimum** `ALLOWED_TOOLS` for your domain. Use built-in Claude tools 
 | Task shape | Typical tools |
 |---|---|
 | Web research | `WebSearch,WebFetch,Read,Grep` |
-| Vault I/O via git-rest | `Bash(scripts/vault-read.sh:*),Bash(scripts/vault-write.sh:*),Bash(scripts/vault-list.sh:*),Grep` |
+| Vault I/O via git-rest | `Bash(scripts/vault-read.sh:*),Bash(scripts/vault-write.sh:*),Bash(scripts/vault-complete.sh:*),Bash(scripts/vault-list.sh:*),Grep` |
 | API query | `Bash(scripts/api-read.sh:*),Grep` |
 | Code edits | `Read,Write,Edit,Grep,Glob,Bash(go:*),Bash(make:*)` |
 | Hybrid (vault + API) | combine vault-*.sh + api-*.sh + `Grep` |
@@ -87,7 +87,7 @@ Pick the **minimum** `ALLOWED_TOOLS` for your domain. Use built-in Claude tools 
 
 Precedent: `trading/agent/trade-analysis/agent/scripts/`:
 - `trading-api-read.sh` — HTTP GET to trading API with optional basic auth
-- `vault-read.sh`, `vault-write.sh`, `vault-list.sh` — curl to git-rest HTTP service
+- `vault-read.sh`, `vault-write.sh`, `vault-complete.sh`, `vault-list.sh` — curl to git-rest HTTP service
 
 ### 4. Write domain prompts
 
