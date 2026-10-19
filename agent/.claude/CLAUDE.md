@@ -49,11 +49,12 @@ A vault is a markdown repository served by a deployed `git-rest` service. The ta
 
 Step 3 sends the complete document, so the local file must be the full current content plus your change — not the change alone.
 
-- **Use the helper scripts.** A script in `scripts/` is the API (`## Tools`), and hand-rolled `curl` calls are what this section exists to replace. These three are how the read-modify-write above is done:
+- **Use the helper scripts.** A script in `scripts/` is the API (`## Tools`), and hand-rolled `curl` calls are what this section exists to replace. These four are how the read-modify-write above is done:
   - `scripts/vault-read.sh <repo-relative-path>` — GETs a file to stdout.
   - `scripts/vault-write.sh <repo-relative-path> <local-file>` — POSTs a whole local file.
   - `scripts/vault-set-section.sh <repo-relative-path> <heading> <content-file>` — GETs the file, replaces or appends exactly the one named section, and POSTs the result, leaving every other byte untouched.
-  - For a change confined to one section, `vault-set-section.sh` is the correct tool; `vault-write.sh` is for whole-file writes only.
+  - `scripts/vault-complete.sh <repo-relative-path>` — GETs the file, sets the task's `status` to `completed` in its YAML frontmatter, and POSTs the whole file back, leaving every other byte untouched.
+  - For a change confined to one section, `vault-set-section.sh` is the correct tool; `vault-write.sh` is for whole-file writes only. `vault-complete.sh` is the tool for a status flip, which a section helper cannot do because it splices `#`-heading sections rather than YAML frontmatter.
 - Reach it over HTTP at `http://vault-obsidian-personal:9090` — the one internal host `## Forbidden` permits
 - **Every `/api/v1/*` request must carry two headers**, or the service refuses it before it touches the vault:
   - `X-Gateway-Initator: <any non-empty name>` — free-form caller identity, logged by the service on an auth failure. **The spelling is deliberate: `Initator`, not `Initiator` — do not "correct" it.**

@@ -1,11 +1,12 @@
 ---
-status: prompted
+status: verifying
 tags:
     - dark-factory
     - spec
 approved: "2026-10-17T15:57:22Z"
 generating: "2026-10-17T16:20:47Z"
 prompted: "2026-10-17T16:20:47Z"
+verifying: "2026-10-18T09:35:49Z"
 branch: dark-factory/a2a-worker-status-push
 ---
 

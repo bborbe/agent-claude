@@ -88,7 +88,10 @@ splice_section() {
 }
 
 main() {
-  : "${GATEWAY_SECRET:?GATEWAY_SECRET is required}"
+  if [ -z "${GATEWAY_SECRET:-}" ]; then
+    echo "vault-set-section.sh: GATEWAY_SECRET is required" >&2
+    exit 1
+  fi
 
   if [ "$#" -ne 3 ]; then
     echo "usage: vault-set-section.sh <repo-relative-path> <heading> <content-file>" >&2

@@ -198,6 +198,22 @@ else
   bad "process: no temporary files left behind on the success path (before=${before} after=${after})"
 fi
 
+# Missing secret: fails before any request, with the explicit guard. The exit
+# status alone is not evidence here — bash 5 already exits 1 on the old `:?`
+# form — so the case also asserts the guard is no longer that form.
+env -u GATEWAY_SECRET PATH="${tmp}/bin:${PATH}" TMPDIR="${tmp}/spill" \
+  bash "${here}/vault-set-section.sh" 'notes/proc.md' '# Notes' "${tmp}/content_proc.md" \
+  > "${tmp}/nosecret_out.txt" 2> "${tmp}/nosecret_err.txt"
+rc_nosecret=$?
+
+if [ "$rc_nosecret" -ne 0 ] \
+  && grep -q 'GATEWAY_SECRET is required' "${tmp}/nosecret_err.txt" \
+  && ! grep -qF ': "${GATEWAY_SECRET:?' "${here}/vault-set-section.sh"; then
+  pass "process: missing GATEWAY_SECRET exits non-zero with the required message"
+else
+  bad "process: missing GATEWAY_SECRET exits non-zero with the required message (rc=${rc_nosecret})"
+fi
+
 # The shipped helper already cleans up on this path, because `set -e` exits from
 # inside main with its locals still live. Kept as a guard on the fix: a cleanup
 # moved to the end of main would satisfy the two checks above and leak here.
