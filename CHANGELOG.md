@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.22.0
 
 - feat: give a cluster worker a way to close its own vault task row — the pod could already write vault files but had no verb to move a row's `status` to `completed`, so `agent/scripts/vault-complete.sh <repo-relative-path>` now GETs the file, sets the `status` key in its YAML frontmatter to `completed` and POSTs the whole file back so the `git-rest` service commits and pushes it; the change is scoped to the frontmatter block — a body line that merely looks like `status:` is never touched — and a missing, duplicate or unclosed frontmatter fails loudly instead of guessing, and its fixture-driven test runs on every `make precommit` through the `shell-test` target's `agent/scripts/*_test.sh` glob.
 
