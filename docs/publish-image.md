@@ -54,9 +54,13 @@ Expect exit 0. Then confirm the artifact is that tag's own build rather than a s
 retagged:
 
 ```bash
+docker pull docker.io/bborbe/agent-claude:vX.Y.Z
 docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' \
   docker.io/bborbe/agent-claude:vX.Y.Z
 ```
+
+(`docker inspect` reads the local daemon, so the pull is what makes this check work from a
+machine that did not do the build.)
 
 Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which `make build`
 feeds from `git describe --tags`.
