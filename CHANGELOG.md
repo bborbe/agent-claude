@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - fix: guard `application.Run` against a nil result from `agent.Run` — the run dereferenced `result.Status` without checking it, so the `(nil, nil)` that `github.com/bborbe/agent` returns when every step of a phase is skipped panicked the binary and burned a Job attempt; the tail of `Run` now lives in `recordAgentResult`, which records a failed run and returns a named `agent run returned no result` error instead, and the agent provider is reachable through the package-level `createAgentProvider` seam so a spec drives the production call site rather than a helper beside it.
+- chore: bump Go to 1.27.3 in `go.mod` and the `Dockerfile` build stage so `govulncheck` clears `GO-2026-6809`, which fails the vulncheck gate for every merge while the module sits on 1.27.1.
 
 ## v0.22.0
 
