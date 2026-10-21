@@ -18,12 +18,15 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
+	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
 	interactive "github.com/bborbe/agent/interactive"
 	agentmocks "github.com/bborbe/agent/mocks"
 	"github.com/bborbe/argument/v2"
+	"github.com/bborbe/errors"
 	"github.com/bborbe/k8s"
 	k8smocks "github.com/bborbe/k8s/mocks"
 	libtime "github.com/bborbe/time"
@@ -590,6 +593,142 @@ var _ = Describe("application.newInteractiveService", func() {
 		// The route answers from the registry, not the store: a body naming the store
 		// would mean the pod had gone looking for a gate somewhere it cannot reach.
 		Expect(recorder.Body.String()).NotTo(ContainSubstring("store.example.test"))
+	})
+})
+
+// The agent provider is a package-level seam, so this spec stubs it for the
+// duration of the spec and restores the original afterwards — the same pattern
+// the inClusterNamespacePath specs use. The call under test is application.Run
+// itself: a test against a helper beside it would pass while the production
+// dereference stayed unguarded.
+var _ = Describe("application.Run nil result", func() {
+	var ctx context.Context
+	var originalCreateAgentProvider func(
+		claudelib.ClaudeConfigDir,
+		claudelib.AgentDir,
+		claudelib.AllowedTools,
+		claudelib.ClaudeModel,
+		map[string]string,
+		map[string]string,
+	) agentlib.AgentProvider
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		originalCreateAgentProvider = createAgentProvider
+		DeferCleanup(func() { createAgentProvider = originalCreateAgentProvider })
+	})
+
+	// A step whose ShouldRun is false makes StepRunner.Run return (nil, nil),
+	// which Agent.Run propagates as its own (nil, nil) — the exact library
+	// behaviour that reached the unguarded result.Status dereference.
+	It("returns a named error instead of panicking when the agent returns no result", func() {
+		step := &agentmocks.AgentStep{}
+		step.NameReturns("skipped")
+		step.ShouldRunReturns(false, nil)
+		provider := &agentmocks.AgentAgentProvider{}
+		provider.GetReturns(
+			agentlib.NewAgent(agentlib.NewPhase("execution", step)),
+			nil,
+		)
+		createAgentProvider = func(
+			_ claudelib.ClaudeConfigDir,
+			_ claudelib.AgentDir,
+			_ claudelib.AllowedTools,
+			_ claudelib.ClaudeModel,
+			_ map[string]string,
+			_ map[string]string,
+		) agentlib.AgentProvider {
+			return provider
+		}
+
+		app := &application{
+			Phase:          "execution",
+			TaskContent:    "# a task",
+			TaskType:       string(agentlib.TaskTypeLLM),
+			PushgatewayURL: "http://127.0.0.1:1",
+		}
+
+		Expect(func() { _ = app.Run(ctx, nil) }).NotTo(Panic())
+		err := app.Run(ctx, nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("agent run returned no result"))
+	})
+
+	// The success path moved into recordAgentResult with the rest of the tail,
+	// so it needs a spec of its own now that Run no longer contains it.
+	It("returns nil and records the result when the agent run succeeds", func() {
+		step := &agentmocks.AgentStep{}
+		step.NameReturns("finish")
+		step.ShouldRunReturns(true, nil)
+		step.RunReturns(&agentlib.Result{
+			Status:    agentlib.AgentStatusDone,
+			NextPhase: "done",
+		}, nil)
+		provider := &agentmocks.AgentAgentProvider{}
+		provider.GetReturns(
+			agentlib.NewAgent(agentlib.NewPhase("execution", step)),
+			nil,
+		)
+		createAgentProvider = func(
+			_ claudelib.ClaudeConfigDir,
+			_ claudelib.AgentDir,
+			_ claudelib.AllowedTools,
+			_ claudelib.ClaudeModel,
+			_ map[string]string,
+			_ map[string]string,
+		) agentlib.AgentProvider {
+			return provider
+		}
+
+		app := &application{
+			Phase:          "execution",
+			TaskContent:    "# a task",
+			TaskType:       string(agentlib.TaskTypeLLM),
+			PushgatewayURL: "http://127.0.0.1:1",
+		}
+
+		Expect(app.Run(ctx, nil)).To(Succeed())
+	})
+
+	// The runErr != nil branch moved out of Run into recordAgentResult, so it
+	// needs its own spec now that it no longer sits in the covered function.
+	It("returns a wrapped agent error when the agent run fails", func() {
+		step := &agentmocks.AgentStep{}
+		step.NameReturns("boom")
+		step.ShouldRunReturns(true, nil)
+		step.RunReturns(nil, errors.New(ctx, "boom"))
+		provider := &agentmocks.AgentAgentProvider{}
+		provider.GetReturns(
+			agentlib.NewAgent(agentlib.NewPhase("execution", step)),
+			nil,
+		)
+		createAgentProvider = func(
+			_ claudelib.ClaudeConfigDir,
+			_ claudelib.AgentDir,
+			_ claudelib.AllowedTools,
+			_ claudelib.ClaudeModel,
+			_ map[string]string,
+			_ map[string]string,
+		) agentlib.AgentProvider {
+			return provider
+		}
+
+		app := &application{
+			Phase:          "execution",
+			TaskContent:    "# a task",
+			TaskType:       string(agentlib.TaskTypeLLM),
+			PushgatewayURL: "http://127.0.0.1:1",
+		}
+
+		err := app.Run(ctx, nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("agent run failed"))
+
+		// Restore eagerly so the restoration itself is asserted, not just scheduled.
+		createAgentProvider = originalCreateAgentProvider
+		Expect(reflect.ValueOf(createAgentProvider).Pointer()).To(Equal(
+			reflect.ValueOf(originalCreateAgentProvider).Pointer(),
+		))
 	})
 })
 
