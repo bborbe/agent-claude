@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/bborbe/k8s"
-	k8smocks "github.com/bborbe/k8s/mocks"
 	libtime "github.com/bborbe/time"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -21,7 +20,7 @@ import (
 var _ = Describe("Publisher", func() {
 	var (
 		ctx             context.Context
-		deployer        *k8smocks.K8sConfigMapDeployer
+		deployer        *fakeConfigMapDeployer
 		currentDateTime libtime.CurrentDateTime
 		recorder        heartbeat.ActivityRecorder
 		publisher       heartbeat.Publisher
@@ -29,7 +28,7 @@ var _ = Describe("Publisher", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		deployer = &k8smocks.K8sConfigMapDeployer{}
+		deployer = &fakeConfigMapDeployer{}
 		deployer.GetReturns(nil, errors.New("not found"))
 		currentDateTime = libtime.NewCurrentDateTime()
 		currentDateTime.SetNow(libtime.DateTime(time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)))
