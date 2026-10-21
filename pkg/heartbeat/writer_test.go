@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/bborbe/k8s"
-	k8smocks "github.com/bborbe/k8s/mocks"
 	libtime "github.com/bborbe/time"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,7 +22,7 @@ import (
 var _ = Describe("ConfigMapWriter", func() {
 	var (
 		ctx             context.Context
-		deployer        *k8smocks.K8sConfigMapDeployer
+		deployer        *fakeConfigMapDeployer
 		currentDateTime libtime.CurrentDateTime
 		namespace       k8s.Namespace
 		writer          heartbeat.Writer
@@ -31,7 +30,7 @@ var _ = Describe("ConfigMapWriter", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		deployer = &k8smocks.K8sConfigMapDeployer{}
+		deployer = &fakeConfigMapDeployer{}
 		currentDateTime = libtime.NewCurrentDateTime()
 		currentDateTime.SetNow(libtime.DateTime(time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)))
 		namespace = k8s.Namespace("default")

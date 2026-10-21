@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
+	a2a "github.com/a2aproject/a2a-go/v2/a2a"
 	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
 	interactive "github.com/bborbe/agent/interactive"
@@ -27,7 +28,6 @@ import (
 	"github.com/bborbe/argument/v2"
 	"github.com/bborbe/errors"
 	"github.com/bborbe/k8s"
-	k8smocks "github.com/bborbe/k8s/mocks"
 	libtime "github.com/bborbe/time"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -35,6 +35,16 @@ import (
 
 	"github.com/bborbe/agent-claude/pkg/heartbeat"
 )
+
+// fakeK8sInterface is the zero-value clientset the heartbeat specs pass in.
+// It replaces k8smocks.K8sInterface, whose generated package no longer compiles
+// against k8s.io/client-go v0.38.0-alpha.2 (the typed interfaces gained
+// DeleteWithResult and bborbe/k8s v1.14.23's mocks predate it). The helper only
+// wraps the clientset, so embedding the interface is enough — no method is
+// called on it.
+type fakeK8sInterface struct {
+	k8s.Interface
+}
 
 var _ = Describe("application argument parsing", func() {
 	var ctx context.Context
@@ -518,6 +528,9 @@ var _ = Describe("application.newInteractiveService", func() {
 		// /a2a is gated: without the bearer token the gate answers 401 before the
 		// handler runs, and the assertion below would pass for the wrong reason.
 		request.Header.Set("Authorization", "Bearer test-token")
+		// a2a-go v2.7.0 rejects a call whose A2A-Version does not match the version
+		// the transport serves; an absent header is treated as "0.3".
+		request.Header.Set(a2a.SvcParamVersion, string(a2a.Version))
 		service.Handler().ServeHTTP(recorder, request)
 
 		Expect(recorder.Code).To(Equal(http.StatusOK))
@@ -771,7 +784,7 @@ var _ = Describe("buildHeartbeatPublisher", func() {
 
 		publisher, err := buildHeartbeatPublisher(
 			context.Background(),
-			&k8smocks.K8sInterface{},
+			&fakeK8sInterface{},
 			heartbeat.NewActivityRecorder(libtime.NewCurrentDateTime()),
 			libtime.NewCurrentDateTime(),
 		)
@@ -787,7 +800,7 @@ var _ = Describe("buildHeartbeatPublisher", func() {
 
 		publisher, err := buildHeartbeatPublisher(
 			context.Background(),
-			&k8smocks.K8sInterface{},
+			&fakeK8sInterface{},
 			heartbeat.NewActivityRecorder(libtime.NewCurrentDateTime()),
 			libtime.NewCurrentDateTime(),
 		)

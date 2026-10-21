@@ -229,6 +229,10 @@ func postA2A(serverURL, body string) (int, string, error) {
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+testPushToken)
+	// a2a-go v2.7.0 rejects a call whose A2A-Version does not match the version the
+	// transport serves; an absent header is treated as "0.3", so every call must
+	// name the served version explicitly.
+	request.Header.Set(a2a.SvcParamVersion, string(a2a.Version))
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return 0, "", err
