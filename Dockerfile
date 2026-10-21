@@ -1,5 +1,5 @@
 ARG DOCKER_REGISTRY=docker.prod.nuke.benjamin-borbe.de:443
-FROM ${DOCKER_REGISTRY}/golang:1.27.1 AS build
+FROM ${DOCKER_REGISTRY}/golang:1.27.3 AS build
 ARG BUILD_GIT_VERSION=dev
 ARG BUILD_GIT_COMMIT=none
 ARG BUILD_DATE=unknown
@@ -97,9 +97,12 @@ COPY --from=build /usr/local/go/lib/time/zoneinfo.zip /
 # `command not found`) rather than a finding. Removing that state is the point.
 #
 # ⚠️ `go` is COPIED from the build stage, NOT `apk add`-ed, and that is load-bearing.
-# The build stage is `golang:1.27.1`, and this repo's own `Makefile.precommit`
-# records 1.27.2 as **not adoptable here**: `errcheck` v1.20.0 — the newest release
-# — cannot read 1.27.2 export data, so the whole check chain stops. Copying the
+# The build stage is `golang:1.27.3`. This repo's own `Makefile.precommit` had
+# recorded 1.27.2 as **not adoptable here**: `errcheck` v1.20.0 — then the newest
+# release — could not read 1.27.2 export data, so the whole check chain stopped.
+# 1.27.3 is adopted on 2026-10-21 because `GO-2026-6809` fails the vulncheck gate
+# for every merge while `go.mod` sits on 1.27.1, and CI's `golangci-lint` chain
+# reports 0 issues on 1.27.3 — so the errcheck hold does not extend to it. Copying the
 # build stage's toolchain makes the pod's Go the SAME version the binary is built
 # with, and makes that constraint impossible to drift past on an unrelated `apk`
 # bump. `GOTOOLCHAIN=local` stops Go downloading a different one at run time, which

@@ -233,7 +233,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		)
 	}
 
-	provider := factory.CreateAgentProvider(
+	provider := createAgentProvider(
 		a.ClaudeConfigDir,
 		a.AgentDir,
 		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
@@ -249,10 +249,31 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	}
 
 	result, err := agent.Run(ctx, a.Phase, a.TaskContent, deliverer)
-	if err != nil {
+	return recordAgentResult(ctx, jobMetrics, start, result, err)
+}
+
+// recordAgentResult records the metrics for a finished agent run and reports the
+// outcome. agent.Run returns (nil, nil) when every step of the requested phase is
+// skipped, so the nil result is a reachable outcome rather than a defensive check:
+// dereferencing it panicked the pod and burned a Job attempt. A nil result is
+// reported as a failed run with a named error so the metrics and delivery paths
+// see a failure instead of a crash.
+func recordAgentResult(
+	ctx context.Context,
+	jobMetrics libmetrics.JobMetrics,
+	start time.Time,
+	result *agentlib.Result,
+	runErr error,
+) error {
+	if runErr != nil {
 		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
 		jobMetrics.RecordDuration(time.Since(start))
-		return errors.Wrap(ctx, err, "agent run failed")
+		return errors.Wrap(ctx, runErr, "agent run failed")
+	}
+	if result == nil {
+		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
+		jobMetrics.RecordDuration(time.Since(start))
+		return errors.New(ctx, "agent run returned no result")
 	}
 	jobMetrics.RecordRun(result.Status)
 	jobMetrics.RecordDuration(time.Since(start))
@@ -479,6 +500,10 @@ func buildHeartbeatPublisher(
 	)
 	return heartbeat.NewPublisher(recorder, writer, heartbeat.RefreshInterval), nil
 }
+
+// createAgentProvider is the seam tests use to inject an agent provider.
+// Production uses factory.CreateAgentProvider.
+var createAgentProvider = factory.CreateAgentProvider
 
 // inClusterNamespacePath is where the kubelet mounts the pod's own namespace — the
 // same service-account mount k8s_rest.InClusterConfig reads from. It is a var
