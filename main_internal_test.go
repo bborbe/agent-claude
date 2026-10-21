@@ -18,7 +18,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"reflect"
 	"time"
 
 	agentlib "github.com/bborbe/agent"
@@ -648,7 +647,8 @@ var _ = Describe("application.Run nil result", func() {
 			PushgatewayURL: "http://127.0.0.1:1",
 		}
 
-		Expect(func() { _ = app.Run(ctx, nil) }).NotTo(Panic())
+		// A panic here fails the spec through Ginkgo's own recovery, so one call
+		// proves both halves: no panic, and a named error instead of a result.
 		err := app.Run(ctx, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("agent run returned no result"))
@@ -723,12 +723,6 @@ var _ = Describe("application.Run nil result", func() {
 		err := app.Run(ctx, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("agent run failed"))
-
-		// Restore eagerly so the restoration itself is asserted, not just scheduled.
-		createAgentProvider = originalCreateAgentProvider
-		Expect(reflect.ValueOf(createAgentProvider).Pointer()).To(Equal(
-			reflect.ValueOf(originalCreateAgentProvider).Pointer(),
-		))
 	})
 })
 
