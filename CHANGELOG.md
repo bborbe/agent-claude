@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: bake `golangci-lint` v2.14.0, `govulncheck` v1.3.0 and `osv-scanner` v2.6.0 into the runtime image as prebuilt binaries, so a COLD pod no longer compiles them from source inside its first `make check` — measured 601 s and cancelled at the interactive server's 10-minute write deadline, against 70 s on a warm cache. Versions pin to `bborbe/go-skeleton`'s canonical `tools.env`; each is asserted with `--version` at build time. `govulncheck` publishes no release binary, so it is built in the `build` stage and copied in. The runtime-stage comment no longer claims every check prerequisite is a `go run`.
+
 ## v0.22.3
 
 - chore: update github.com/bborbe/agent to v0.117.0
