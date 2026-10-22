@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: warm the Go build cache in the runtime image by running each check tool's own `go run pkg@$(VERSION)` once at build time (`golangci-lint` v2.14.0, `govulncheck` v1.3.0, `osv-scanner` v2.6.0), so a fresh k8s A2A pod's first `make check` is a cache hit rather than a from-source compile — measured 601 s cold (cancelled at the interactive server's 10-minute write deadline) against 70 s warm. `make check` invokes these as `go run`, which never consults an installed binary, so baking the binaries alone would not have removed the compile. Versions pin to `bborbe/go-skeleton`'s canonical `tools.env`; the cache is keyed by those pins, the Go version and `CGO_ENABLED=0`, matching the pod's env.
+
 ## v0.22.3
 
 - chore: update github.com/bborbe/agent to v0.117.0

@@ -91,10 +91,22 @@ COPY --from=build /usr/local/go/lib/time/zoneinfo.zip /
 
 # ── Source-repository build toolchain ─────────────────────────────────────────
 # A cluster worker asked to carry a repo task must be able to run that repo's OWN
-# `make check`. Every prerequisite except `trivy` is a `go run …` — lint, vet,
-# errcheck, vulncheck, osv-scanner, gosec — so with no Go toolchain the check
-# cannot run at all, and its failure is an ENVIRONMENT failure (`exit 127`,
-# `command not found`) rather than a finding. Removing that state is the point.
+# `make check`. Its prerequisites are `go vet`, the three tools below
+# (`golangci-lint`, `govulncheck`, `osv-scanner`) and `trivy`; `errcheck` and
+# `gosec` are embedded in golangci-lint, not standalone. With no Go toolchain
+# `go vet` cannot run at all, and its failure is an ENVIRONMENT failure
+# (`exit 127`, `command not found`) rather than a finding. Removing that state is
+# the point.
+#
+# ⚠️ `make check` invokes the three tools as `go run pkg@$(VERSION)` — the
+# canonical Makefile does NOT consult an installed binary — so installing them
+# would not remove the compile. What does is a WARM CACHE: the block below runs
+# each `go run` once at BUILD time, leaving GOCACHE and GOMODCACHE populated for
+# the same HOME the pod uses. A fresh pod's first `make check` is then a cache
+# hit. Measured: cold 601 s (cancelled at the 10-minute write deadline) vs 70 s
+# warm. ⚠️ The cache is keyed by module version, Go version, CGO_ENABLED and
+# build inputs; it is warmed for `bborbe/go-skeleton`'s canonical `tools.env`
+# pins, and a repo pinning a different version pays its own compile as before.
 #
 # ⚠️ `go` is COPIED from the build stage, NOT `apk add`-ed, and that is load-bearing.
 # The build stage is `golang:1.27.3`. This repo's own `Makefile.precommit` had
@@ -116,9 +128,8 @@ COPY --from=build /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 ENV GOTOOLCHAIN=local
 
-# `trivy` is the one check prerequisite that is not a `go run` — the repo's `trivy`
-# target invokes the binary directly — and Alpine packages none, so it comes from
-# its own release tarball. Pinned: an unpinned fetch would let the scanner change
+# `trivy` is not a `go run` — the repo's `trivy` target invokes the binary
+# directly — and Alpine packages none, so it comes from its own release tarball. Pinned: an unpinned fetch would let the scanner change
 # underneath a check whose result is recorded as evidence.
 # ⚠️ `Linux-64bit` is the amd64 asset; this image is built for that platform.
 # ⚠️ `trivy --version` runs at BUILD time on purpose. That binary is built against
@@ -132,6 +143,20 @@ RUN curl -sSfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY
       | tar -xz -C /usr/local/bin trivy \
  && test -x /usr/local/bin/trivy \
  && trivy --version
+
+# ── Warm the Go build cache ───────────────────────────────────────────────────
+# Runs each tool's own `go run pkg@$(VERSION)` once, exactly as `make check`
+# does, so the build artifacts land in GOCACHE and the modules in GOMODCACHE —
+# both under the pod's HOME. `CGO_ENABLED=0` matches what the alpine runtime
+# resolves by default (no C compiler), so the cache key matches the pod's.
+# Go verifies every downloaded module against the checksum DB (sum.golang.org),
+# so no separate artifact checksum is needed here.
+ARG GOLANGCI_LINT_VERSION=v2.14.0
+ARG GOVULNCHECK_VERSION=v1.3.0
+ARG OSV_SCANNER_VERSION=v2.6.0
+RUN CGO_ENABLED=0 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION} --version \
+ && CGO_ENABLED=0 go run golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} -version \
+ && CGO_ENABLED=0 go run github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION} --version
 
 ENV BUILD_GIT_VERSION=${BUILD_GIT_VERSION}
 ENV BUILD_GIT_COMMIT=${BUILD_GIT_COMMIT}
