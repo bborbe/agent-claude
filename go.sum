@@ -4,8 +4,8 @@ github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAw
 github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/a2aproject/a2a-go/v2 v2.7.0 h1:rwIpzO5O9Mxu/Rm4S2SZfHYzNcvF3FK9aaaTxP35kAo=
 github.com/a2aproject/a2a-go/v2 v2.7.0/go.mod h1:rvFIb0sBJl2qmJRYU2fQxI6hhIQksmGGMEhT/uRwWww=
-github.com/bborbe/agent v0.115.0 h1:ZEStOqaicsw1YJL94tx1EPNMIm3DZMdeOgFHSDNsouI=
-github.com/bborbe/agent v0.115.0/go.mod h1:DD8zKyNHU+pOuNCIZIz8Jsnk7nm3qdObs2I++eC84Zg=
+github.com/bborbe/agent v0.116.0 h1:LePs7l9y0yYatQ7EYWvCzNjteAMZzP35xAhc+rjMBKs=
+github.com/bborbe/agent v0.116.0/go.mod h1:V+jXNRZg8bQ8el5OYCCrtt/jOUn0xptduDKtcOxAAnc=
 github.com/bborbe/argument/v2 v2.13.7 h1:DIP3uNHk7y+H7K+5ezIQPxSGzirBc5mvc53EQF7ExYY=
 github.com/bborbe/argument/v2 v2.13.7/go.mod h1:pVLOxA3b37u8D9dafY4vqlYIWm/U8gBob7AJ95qZeUc=
 github.com/bborbe/boltkv v1.16.1 h1:bbXWHHpTqYNQMd+QitEW1WrG9s/WIbKA81R2H6JOx7s=
@@ -74,7 +74,7 @@ github.com/go-openapi/jsonpointer v1.0.2 h1:NbW7xT2b+l7x+JefiPGDsZWsrLk1ogrz4AHK
 github.com/go-openapi/jsonpointer v1.0.2/go.mod h1:N0rI4MbNKD7xAFTiHtB+5Nhrg2j/wwYg7m7Fmb4/jk8=
 github.com/go-openapi/jsonreference v1.0.3 h1:5rDbq+JsjCv6/nUDDJt83nLZoADI4w03uvHXer+4aYQ=
 github.com/go-openapi/jsonreference v1.0.3/go.mod h1:OJSlMXHysgH272D9z2tiy2MGe5A9vQLHaCPb6KbYdE4=
-github.com/go-openapi/swag v0.29.2 h1:9n8frkcsuQRA0INU31VbxNxt1zBaHxrHYGEf5BUjFi4=
+github.com/go-openapi/swag v0.29.1 h1:C6EeWzUwQtcWEhE9eqBdUubGXxhWY4PlzHMLD7kLaiQ=
 github.com/go-openapi/swag/conv v0.29.2 h1:8c9shoB8l0QRSR6ymq1llHdBWDqpIgJfjTGHx3Vuhm0=
 github.com/go-openapi/swag/conv v0.29.2/go.mod h1:AZS0YigTNf8qNtD6WqJz/N4RUNmpr76SyjFGkq4+p6Q=
 github.com/go-openapi/swag/jsonutils v0.29.2 h1:uZNSD2/rJDYAfvsLYkykTzXuyxM3QpDKV9jhRHrMu6k=
