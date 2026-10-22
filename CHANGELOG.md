@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- chore: update github.com/bborbe/agent to v0.117.0
+
 ## v0.22.2
 
 - chore: update github.com/a2aproject/a2a-go/v2 to v2.7.0, github.com/bborbe/agent to v0.114.0, github.com/bborbe/argument/v2 to v2.13.6, github.com/bborbe/cqrs to v0.6.12, github.com/bborbe/errors to v1.6.3, github.com/bborbe/k8s to v1.14.23, github.com/bborbe/kafka to v1.28.5, github.com/bborbe/run to v1.11.2, github.com/bborbe/sentry to v1.10.5, github.com/bborbe/service to v1.11.1, github.com/bborbe/time to v1.27.18, github.com/bborbe/vault-cli to v0.177.0, github.com/onsi/ginkgo/v2 to v2.33.1, github.com/onsi/gomega to v1.44.0, github.com/prometheus/client_golang to v1.25.0, k8s.io/api to v0.38.0-alpha.2, k8s.io/apimachinery to v0.38.0-alpha.2
