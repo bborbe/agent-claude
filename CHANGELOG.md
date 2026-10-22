@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- feat: forward `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to the Claude child. `github.com/bborbe/agent` replaces the child environment with a fixed allowlist (`HOME`, `PATH`, `USER`, `TZ`, `ZONEINFO`, `TMPDIR`, `LANG`, `LC_ALL`), so a proxy set only on the pod never reached the Bash tool — and therefore never reached `git`, the Go toolchain, `govulncheck`, `osv-scanner` or `trivy`, the processes that actually need it. A worker behind an egress proxy was silently unproxied, and every clone and module fetch was refused by its own NetworkPolicy. `NO_PROXY` matters as much as the other two: without it an in-cluster endpoint (the model router, the attention store, the vault writer) is sent to the proxy and refused, so the worker loses its own model rather than degrading. ⚠️ The three have dedicated fields rather than riding `CLAUDE_ENV` because that bag splits on commas and `NO_PROXY` is itself a comma-separated list — packing it there keeps only the first entry and silently drops every in-cluster bypass after it.
+
 ## v0.23.0
 
 - feat: warm the Go build cache in the runtime image by running each check tool's own `go run pkg@$(VERSION)` once at build time (`golangci-lint` v2.14.0, `govulncheck` v1.3.0, `osv-scanner` v2.6.0), so a fresh k8s A2A pod's first `make check` is a cache hit rather than a from-source compile — measured 601 s cold (cancelled at the interactive server's 10-minute write deadline) against 70 s warm. `make check` invokes these as `go run`, which never consults an installed binary, so baking the binaries alone would not have removed the compile. Versions pin to `bborbe/go-skeleton`'s canonical `tools.env`; the cache is keyed by those pins, the Go version and `CGO_ENABLED=0`, matching the pod's env.

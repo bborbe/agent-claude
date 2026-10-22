@@ -62,6 +62,15 @@ type application struct {
 	AnthropicAuthToken string                `required:"false" arg:"anthropic-auth-token" env:"ANTHROPIC_AUTH_TOKEN" usage:"Bearer token for ANTHROPIC_BASE_URL"                                  display:"length"`
 	AnthropicModel     claudelib.ClaudeModel `required:"false" arg:"anthropic-model"      env:"ANTHROPIC_MODEL"      usage:"Model name; also exposed to the claude subprocess as ANTHROPIC_MODEL"                  default:"sonnet"`
 
+	// Outbound HTTP proxy, forwarded to the Claude child rather than left on the pod.
+	// The library replaces the child environment with a fixed allowlist, so a proxy
+	// set only on the pod never reaches the Bash tool. Dedicated fields rather than
+	// CLAUDE_ENV entries because CLAUDE_ENV is a comma-separated bag and NO_PROXY is
+	// itself a comma-separated list — packing it there truncates it silently.
+	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"  display:"length"`
+	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child" display:"length"`
+	NoProxy    string `required:"false" arg:"no-proxy"    env:"NO_PROXY"    usage:"Proxy bypass list forwarded to the Claude child" display:"length"`
+
 	// Environment
 	Branch base.Branch `required:"true" arg:"branch" env:"BRANCH" usage:"branch" default:"dev"`
 
@@ -94,6 +103,17 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	}
 	if a.AnthropicModel != "" {
 		claudeEnv["ANTHROPIC_MODEL"] = a.AnthropicModel.String()
+	}
+	// The pod carries these three, but the library's allowlist drops them before the
+	// child starts, so they have to ride this map to reach the Bash tool.
+	if a.HTTPProxy != "" {
+		claudeEnv["HTTP_PROXY"] = a.HTTPProxy
+	}
+	if a.HTTPSProxy != "" {
+		claudeEnv["HTTPS_PROXY"] = a.HTTPSProxy
+	}
+	if a.NoProxy != "" {
+		claudeEnv["NO_PROXY"] = a.NoProxy
 	}
 
 	agent := factory.CreateAgent(

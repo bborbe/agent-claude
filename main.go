@@ -88,6 +88,22 @@ type application struct {
 	AnthropicAuthToken string                `required:"false" arg:"anthropic-auth-token" env:"ANTHROPIC_AUTH_TOKEN" usage:"Bearer token for ANTHROPIC_BASE_URL"                                  display:"length"`
 	AnthropicModel     claudelib.ClaudeModel `required:"false" arg:"anthropic-model"      env:"ANTHROPIC_MODEL"      usage:"Model name; also exposed to the claude subprocess as ANTHROPIC_MODEL"                  default:"sonnet"`
 
+	// Outbound HTTP proxy, forwarded to the Claude child rather than left on the pod.
+	// The library replaces the child environment with a fixed allowlist (HOME, PATH,
+	// USER, TZ, ZONEINFO, TMPDIR, LANG, LC_ALL), so a proxy set only on the pod is
+	// invisible to the Bash tool — and therefore to git, the Go toolchain,
+	// govulncheck, osv-scanner and trivy, which are the processes that actually need
+	// it. NO_PROXY matters as much as the other two: without it an in-cluster endpoint
+	// (the model router, the attention store, the vault writer) is sent to the proxy
+	// and refused, so a worker loses its own model rather than degrading.
+	//
+	// ⚠️ These are dedicated fields rather than CLAUDE_ENV entries because CLAUDE_ENV
+	// is a comma-separated bag and NO_PROXY is itself a comma-separated list — packing
+	// it there would truncate it to its first entry and silently drop the rest.
+	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"  display:"length"`
+	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child" display:"length"`
+	NoProxy    string `required:"false" arg:"no-proxy"    env:"NO_PROXY"    usage:"Proxy bypass list forwarded to the Claude child" display:"length"`
+
 	// Attention-store credentials, forwarded to the Claude child rather than kept
 	// on the pod. The pod's own environment carries both names, but the library
 	// replaces the child environment with a fixed allowlist, so without this
@@ -313,6 +329,19 @@ func (a *application) buildClaudeEnv() map[string]string {
 	}
 	if a.GatewaySecret != "" {
 		claudeEnv["GATEWAY_SECRET"] = a.GatewaySecret
+	}
+	// The proxy triple rides the same final layer, and needs it for the same reason
+	// as the vars above: the pod carries all three, but the library's allowlist drops
+	// them before the child starts, so a Bash tool running `git clone` or `go mod
+	// download` would otherwise see no proxy at all.
+	if a.HTTPProxy != "" {
+		claudeEnv["HTTP_PROXY"] = a.HTTPProxy
+	}
+	if a.HTTPSProxy != "" {
+		claudeEnv["HTTPS_PROXY"] = a.HTTPSProxy
+	}
+	if a.NoProxy != "" {
+		claudeEnv["NO_PROXY"] = a.NoProxy
 	}
 	// The GitHub App triple rides the same final layer, and needs it for the same
 	// reason: the pod's own environment carries all three, but the library's

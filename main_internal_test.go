@@ -321,6 +321,39 @@ var _ = Describe("application.buildClaudeEnv", func() {
 		}))
 	})
 
+	// The same allowlist gap, with a symptom that reads like a network fault rather
+	// than a config one: a worker whose pod env carries HTTP_PROXY still runs its
+	// Bash tool without it, so `git clone` and `go mod download` go direct and are
+	// refused by the worker's own NetworkPolicy. NO_PROXY is the other half —
+	// without it the in-cluster router is sent to the proxy and the worker loses its
+	// own model rather than degrading.
+	It("forwards the proxy triple to the Claude child", func() {
+		app := &application{
+			HTTPProxy:  "http://egress-proxy:3128",
+			HTTPSProxy: "http://egress-proxy:3128",
+			NoProxy:    "localhost,127.0.0.1,.svc,claude-code-router-dev",
+		}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"HTTP_PROXY":  "http://egress-proxy:3128",
+			"HTTPS_PROXY": "http://egress-proxy:3128",
+			"NO_PROXY":    "localhost,127.0.0.1,.svc,claude-code-router-dev",
+		}))
+	})
+
+	It("omits the proxy triple when unset, leaving a laptop run unchanged", func() {
+		app := &application{ClaudeEnvRaw: "FOO=bar"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{"FOO": "bar"}))
+	})
+
+	// NO_PROXY is itself a comma-separated list, so it cannot ride the CLAUDE_ENV
+	// bag — envparse splits that on commas and would keep only the first entry,
+	// silently dropping every in-cluster bypass after it. This is why the triple
+	// has dedicated fields rather than being packed into the bag.
+	It("keeps a comma-separated NO_PROXY intact where CLAUDE_ENV would truncate it", func() {
+		app := &application{NoProxy: "a.example,b.example,c.example"}
+		Expect(app.buildClaudeEnv()["NO_PROXY"]).To(Equal("a.example,b.example,c.example"))
+	})
+
 	// The same gap, closed the same way. The pod's own environment carries the
 	// GitHub App triple, but the library's allowlist drops it before the child
 	// starts, so the `git` a worker runs would invoke the credential helper
