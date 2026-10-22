@@ -8,7 +8,7 @@ tool (
 
 require (
 	github.com/a2aproject/a2a-go/v2 v2.7.0
-	github.com/bborbe/agent v0.115.0
+	github.com/bborbe/agent v0.117.0
 	github.com/bborbe/argument/v2 v2.13.7
 	github.com/bborbe/cqrs v0.6.13
 	github.com/bborbe/errors v1.6.4
