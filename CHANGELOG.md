@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-- feat: bake `golangci-lint` v2.14.0, `govulncheck` v1.3.0 and `osv-scanner` v2.6.0 into the runtime image as prebuilt binaries, so a COLD pod no longer compiles them from source inside its first `make check` — measured 601 s and cancelled at the interactive server's 10-minute write deadline, against 70 s on a warm cache. Versions pin to `bborbe/go-skeleton`'s canonical `tools.env`; each is asserted with `--version` at build time. `govulncheck` publishes no release binary, so it is built in the `build` stage and copied in. The runtime-stage comment no longer claims every check prerequisite is a `go run`.
+- feat: warm the Go build cache in the runtime image by running each check tool's own `go run pkg@$(VERSION)` once at build time (`golangci-lint` v2.14.0, `govulncheck` v1.3.0, `osv-scanner` v2.6.0), so a fresh k8s A2A pod's first `make check` is a cache hit rather than a from-source compile — measured 601 s cold (cancelled at the interactive server's 10-minute write deadline) against 70 s warm. `make check` invokes these as `go run`, which never consults an installed binary, so baking the binaries alone would not have removed the compile. Versions pin to `bborbe/go-skeleton`'s canonical `tools.env`; the cache is keyed by those pins, the Go version and `CGO_ENABLED=0`, matching the pod's env.
 
 ## v0.22.3
 
