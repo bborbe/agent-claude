@@ -26,12 +26,20 @@
 set -eu
 
 if [ -n "${GITHUB_APP_ID:-}" ] && [ -n "${GITHUB_APP_INSTALLATION_ID:-}" ] && [ -n "${GITHUB_APP_PEM:-}" ]; then
-	if token=$(/usr/local/bin/gh-token 2>/dev/null) && [ -n "$token" ]; then
+	# The helper's stderr is kept and printed on failure rather than discarded:
+	# "GITHUB_APP_ID is unset" and "GitHub rejected the JWT (HTTP 401)" are the
+	# difference between a misconfigured pod and a transient API failure, and the
+	# mint runs once per container, so a silent failure costs the pod its gh
+	# credential for its whole life. The helper never writes the token to stderr,
+	# so forwarding it cannot leak the credential.
+	if token=$(/usr/local/bin/gh-token 2>/tmp/gh-token.err) && [ -n "$token" ]; then
 		GH_TOKEN="$token"
 		export GH_TOKEN
 	else
 		echo "entrypoint: gh-token produced no token — continuing without GH_TOKEN" >&2
+		cat /tmp/gh-token.err >&2 2>/dev/null || true
 	fi
+	rm -f /tmp/gh-token.err
 fi
 
 exec /main "$@"

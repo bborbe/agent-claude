@@ -182,9 +182,16 @@ RUN CGO_ENABLED=0 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@
 # ⚠️ The binary alone authenticates nothing. `gh-token` + `entrypoint.sh` mint
 # GH_TOKEN from the App credential; without them `gh` runs unauthenticated and
 # every call 401s. The two changes belong together.
+# ⚠️ `--strip-components=2`, not 1. The archive's members are rooted at
+# `gh_${GH_VERSION}_linux_amd64/`, and the binary sits one level deeper at
+# `.../bin/gh` — so stripping only the versioned root extracts it to
+# `/usr/local/bin/bin/gh`, and the `test -x` below then fails and aborts the
+# build. CI runs `make precommit`, which does not build the image, so nothing
+# catches this until a release build; the assertion is what makes it loud then
+# rather than at pod start.
 ARG GH_VERSION=2.103.0
 RUN curl -sSfL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
-      | tar -xz --strip-components=1 -C /usr/local/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" \
+      | tar -xz --strip-components=2 -C /usr/local/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" \
  && test -x /usr/local/bin/gh \
  && gh --version
 
