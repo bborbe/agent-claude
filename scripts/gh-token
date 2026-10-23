@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Print a GitHub App installation token on stdout, for `GH_TOKEN`.
+
+`gh` reads `GH_TOKEN` from the environment and authenticates every call with it,
+so an agent that runs `gh` needs a token in the same way `git` needs one. The
+minting is NOT reimplemented here: `git-credential-github-app` already signs an
+RS256 JWT with `GITHUB_APP_PEM`, exchanges it for an installation token, and
+handles both the raw-PEM and base64 shapes the deployment can deliver. This
+script imports those functions and prints the result, so the two consumers
+cannot drift apart — a fix to the exchange reaches `git` and `gh` together.
+
+The helper is installed as `/usr/local/bin/git-credential-github-app` (no `.py`:
+that is the exact name `git` looks for). In the source tree it sits beside this
+file as `git_credential_github_app.py`, so both locations are probed and the
+first that loads wins.
+
+Exit codes mirror the helper's: a missing App env is a local-input failure, a
+rejected exchange an API failure. The entrypoint treats any non-zero exit as
+"no GH_TOKEN" and carries on, because this image is shared by agents that carry
+no App credential at all.
+"""
+
+import importlib.util
+import os
+import sys
+
+_HELPER_CANDIDATES = (
+    "/usr/local/bin/git-credential-github-app",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "git_credential_github_app.py"),
+)
+
+
+def _load_helper():
+    for path in _HELPER_CANDIDATES:
+        if not os.path.exists(path):
+            continue
+        spec = importlib.util.spec_from_file_location("git_credential_github_app", path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    raise SystemExit("gh-token: git-credential-github-app not found")
+
+
+def main():
+    helper = _load_helper()
+    try:
+        app_id, installation_id, pem_value = helper.read_env(os.environ)
+        token = helper.mint_installation_token(
+            app_id, installation_id, helper.decode_pem(pem_value)
+        )
+    except helper.HelperError as err:
+        print("gh-token: %s" % err, file=sys.stderr)
+        return err.exit_code
+    # A token on stdout and nothing else: the entrypoint command-substitutes this
+    # value into GH_TOKEN, so any decoration would become part of the credential.
+    sys.stdout.write(token)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
