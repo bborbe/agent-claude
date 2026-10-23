@@ -138,6 +138,76 @@ var _ = Describe("application argument parsing", func() {
 	})
 })
 
+// TASK_TYPE is the boundary this change guards: an absent variable falls back
+// to the flag's `unknown` default, while a present-but-empty variable overrides
+// that default with "". Both are map misses in the dispatch table, so these two
+// specs pin how the value arrives through the real parser — if either the
+// default tag or the parser's present-but-empty handling changes, the fail-fast
+// guard in Run would silently stop covering one of the two paths.
+var _ = Describe("TASK_TYPE parsing", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		// Same reset as the argument-parsing specs above: argument.Parse
+		// registers flags on the global flag.CommandLine, so a second Parse in
+		// the same process panics with "flag redefined".
+		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+		os.Args = []string{"agent-claude"}
+	})
+
+	It("defaults to unknown when TASK_TYPE is absent", func() {
+		Expect(os.Unsetenv("TASK_TYPE")).To(Succeed())
+
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.TaskType).To(Equal("unknown"))
+	})
+
+	It("keeps the empty string when TASK_TYPE is set empty", func() {
+		Expect(os.Setenv("TASK_TYPE", "")).To(Succeed())
+		DeferCleanup(func() { _ = os.Unsetenv("TASK_TYPE") })
+
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.TaskType).To(Equal(""))
+	})
+})
+
+var _ = Describe("validateTaskType", func() {
+	var ctx context.Context
+
+	BeforeEach(func() {
+		ctx = context.Background()
+	})
+
+	It("rejects the empty string and names TASK_TYPE and the publisher", func() {
+		err := validateTaskType(ctx, agentlib.TaskType(""))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("TASK_TYPE is empty"))
+		Expect(err.Error()).To(ContainSubstring("task publisher"))
+	})
+
+	It("rejects the flag's unknown default and quotes it", func() {
+		err := validateTaskType(ctx, taskTypeUnset)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("TASK_TYPE is unset"))
+		Expect(err.Error()).To(ContainSubstring(`"unknown"`))
+	})
+
+	// A genuinely unknown non-empty value is the provider's error to report, not
+	// this helper's: the provider's message lists the accepted types.
+	It("leaves a genuinely unknown non-empty value to the provider", func() {
+		Expect(validateTaskType(ctx, agentlib.TaskType("bogus"))).To(Succeed())
+	})
+
+	It("accepts every task type the dispatch table registers", func() {
+		Expect(validateTaskType(ctx, agentlib.TaskTypeLLM)).To(Succeed())
+		Expect(validateTaskType(ctx, agentlib.TaskTypeHealthcheck)).To(Succeed())
+		Expect(validateTaskType(ctx, agentlib.TaskTypeOAuthProbe)).To(Succeed())
+	})
+})
+
 // The startup configuration log is written by a library
 // (github.com/bborbe/argument/v2), which honours only display:"hidden" and
 // display:"length" — every other display value falls through to the branch that
