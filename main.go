@@ -88,6 +88,22 @@ type application struct {
 	AnthropicAuthToken string                `required:"false" arg:"anthropic-auth-token" env:"ANTHROPIC_AUTH_TOKEN" usage:"Bearer token for ANTHROPIC_BASE_URL"                                  display:"length"`
 	AnthropicModel     claudelib.ClaudeModel `required:"false" arg:"anthropic-model"      env:"ANTHROPIC_MODEL"      usage:"Model name; also exposed to the claude subprocess as ANTHROPIC_MODEL"                  default:"sonnet"`
 
+	// Outbound HTTP proxy, forwarded to the Claude child rather than left on the pod.
+	// The library replaces the child environment with a fixed allowlist (HOME, PATH,
+	// USER, TZ, ZONEINFO, TMPDIR, LANG, LC_ALL), so a proxy set only on the pod is
+	// invisible to the Bash tool — and therefore to git, the Go toolchain,
+	// govulncheck, osv-scanner and trivy, which are the processes that actually need
+	// it. NO_PROXY matters as much as the other two: without it an in-cluster endpoint
+	// (the model router, the attention store, the vault writer) is sent to the proxy
+	// and refused, so a worker loses its own model rather than degrading.
+	//
+	// ⚠️ These are dedicated fields rather than CLAUDE_ENV entries because CLAUDE_ENV
+	// is a comma-separated bag and NO_PROXY is itself a comma-separated list — packing
+	// it there would truncate it to its first entry and silently drop the rest.
+	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"  display:"length"`
+	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child" display:"length"`
+	NoProxy    string `required:"false" arg:"no-proxy"    env:"NO_PROXY"    usage:"Proxy bypass list forwarded to the Claude child" display:"length"`
+
 	// Attention-store credentials, forwarded to the Claude child rather than kept
 	// on the pod. The pod's own environment carries both names, but the library
 	// replaces the child environment with a fixed allowlist, so without this
@@ -233,7 +249,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		)
 	}
 
-	provider := factory.CreateAgentProvider(
+	provider := createAgentProvider(
 		a.ClaudeConfigDir,
 		a.AgentDir,
 		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
@@ -249,10 +265,31 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	}
 
 	result, err := agent.Run(ctx, a.Phase, a.TaskContent, deliverer)
-	if err != nil {
+	return recordAgentResult(ctx, jobMetrics, start, result, err)
+}
+
+// recordAgentResult records the metrics for a finished agent run and reports the
+// outcome. agent.Run returns (nil, nil) when every step of the requested phase is
+// skipped, so the nil result is a reachable outcome rather than a defensive check:
+// dereferencing it panicked the pod and burned a Job attempt. A nil result is
+// reported as a failed run with a named error so the metrics and delivery paths
+// see a failure instead of a crash.
+func recordAgentResult(
+	ctx context.Context,
+	jobMetrics libmetrics.JobMetrics,
+	start time.Time,
+	result *agentlib.Result,
+	runErr error,
+) error {
+	if runErr != nil {
 		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
 		jobMetrics.RecordDuration(time.Since(start))
-		return errors.Wrap(ctx, err, "agent run failed")
+		return errors.Wrap(ctx, runErr, "agent run failed")
+	}
+	if result == nil {
+		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
+		jobMetrics.RecordDuration(time.Since(start))
+		return errors.New(ctx, "agent run returned no result")
 	}
 	jobMetrics.RecordRun(result.Status)
 	jobMetrics.RecordDuration(time.Since(start))
@@ -292,6 +329,19 @@ func (a *application) buildClaudeEnv() map[string]string {
 	}
 	if a.GatewaySecret != "" {
 		claudeEnv["GATEWAY_SECRET"] = a.GatewaySecret
+	}
+	// The proxy triple rides the same final layer, and needs it for the same reason
+	// as the vars above: the pod carries all three, but the library's allowlist drops
+	// them before the child starts, so a Bash tool running `git clone` or `go mod
+	// download` would otherwise see no proxy at all.
+	if a.HTTPProxy != "" {
+		claudeEnv["HTTP_PROXY"] = a.HTTPProxy
+	}
+	if a.HTTPSProxy != "" {
+		claudeEnv["HTTPS_PROXY"] = a.HTTPSProxy
+	}
+	if a.NoProxy != "" {
+		claudeEnv["NO_PROXY"] = a.NoProxy
 	}
 	// The GitHub App triple rides the same final layer, and needs it for the same
 	// reason: the pod's own environment carries all three, but the library's
@@ -479,6 +529,10 @@ func buildHeartbeatPublisher(
 	)
 	return heartbeat.NewPublisher(recorder, writer, heartbeat.RefreshInterval), nil
 }
+
+// createAgentProvider is the seam tests use to inject an agent provider.
+// Production uses factory.CreateAgentProvider.
+var createAgentProvider = factory.CreateAgentProvider
 
 // inClusterNamespacePath is where the kubelet mounts the pod's own namespace — the
 // same service-account mount k8s_rest.InClusterConfig reads from. It is a var

@@ -101,18 +101,20 @@ vet:
 # by the `std-error-handling` preset in .golangci.yml's `exclusions.presets`, and
 # `-exclude=G104` is moot because no unchecked-error finding exists for gosec to raise.
 
-# ⚠️ Five of the advisories below (6603, 6610, 6611, 6612, 6617) ALSO carry a
-# `golang.org/x/net` line, and x/net IS bumped to v0.60.0 — a library bump that
-# does not touch the toolchain. That retires them for osv-scanner and trivy, which
-# read the module graph; it does NOT retire them here, because govulncheck reports
-# each of the five against the 1.27.1 stdlib as well. Removing them on the
-# strength of the x/net bump was tried and is wrong.
-# Listed individually, NOT as a range: 6601, 6602, 6606, 6614, 6615 and 6616 fall
-# inside it and are deliberately absent — govulncheck does not report them against
-# this module's graph, and suppressing an advisory that is not firing would hide a
-# finding that later becomes real.
-# Exit condition: drop these (and bump go.mod) once go.mod moves to 1.27.2.
-VULNCHECK_IGNORE ?= GO-2026-4923 GO-2026-4514 GO-2022-0470 GO-2026-4772 GO-2026-4771 GO-2026-5932 GO-2026-5064 GO-2026-5338 GO-2026-5622 GO-2026-6599 GO-2026-6600 GO-2026-6603 GO-2026-6604 GO-2026-6605 GO-2026-6607 GO-2026-6608 GO-2026-6609 GO-2026-6610 GO-2026-6611 GO-2026-6612 GO-2026-6613 GO-2026-6617
+# The ignore set is now a SINGLE advisory. This block previously carried 20 ids
+# covering the Go 1.27.1 stdlib, with an exit condition of "drop these once go.mod
+# moves past 1.27.1". That condition fired: `go.mod` and the `Dockerfile` build
+# stage now sit on 1.27.3, which retires all of them except GO-2026-5932.
+#
+# GO-2026-5932 survives because it is a LIBRARY advisory, not a stdlib one —
+# `golang.org/x/crypto`'s openpgp package is unmaintained and unsafe by design —
+# so a toolchain bump does not move it. Verified on 1.27.3 with
+# `VULNCHECK_IGNORE= make vulncheck`, which reports that id and nothing else.
+#
+# Pruning in the other direction is equally deliberate: suppressing an advisory
+# that is not firing would hide a finding that later becomes real, so ids are
+# listed individually rather than as a range.
+VULNCHECK_IGNORE ?= GO-2026-5932
 
 .PHONY: vulncheck
 vulncheck:

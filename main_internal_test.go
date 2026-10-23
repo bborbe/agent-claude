@@ -20,12 +20,14 @@ import (
 	"path/filepath"
 	"time"
 
+	a2a "github.com/a2aproject/a2a-go/v2/a2a"
+	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
 	interactive "github.com/bborbe/agent/interactive"
 	agentmocks "github.com/bborbe/agent/mocks"
 	"github.com/bborbe/argument/v2"
+	"github.com/bborbe/errors"
 	"github.com/bborbe/k8s"
-	k8smocks "github.com/bborbe/k8s/mocks"
 	libtime "github.com/bborbe/time"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -33,6 +35,16 @@ import (
 
 	"github.com/bborbe/agent-claude/pkg/heartbeat"
 )
+
+// fakeK8sInterface is the zero-value clientset the heartbeat specs pass in.
+// It replaces k8smocks.K8sInterface, whose generated package no longer compiles
+// against k8s.io/client-go v0.38.0-alpha.2 (the typed interfaces gained
+// DeleteWithResult and bborbe/k8s v1.14.23's mocks predate it). The helper only
+// wraps the clientset, so embedding the interface is enough — no method is
+// called on it.
+type fakeK8sInterface struct {
+	k8s.Interface
+}
 
 var _ = Describe("application argument parsing", func() {
 	var ctx context.Context
@@ -309,6 +321,39 @@ var _ = Describe("application.buildClaudeEnv", func() {
 		}))
 	})
 
+	// The same allowlist gap, with a symptom that reads like a network fault rather
+	// than a config one: a worker whose pod env carries HTTP_PROXY still runs its
+	// Bash tool without it, so `git clone` and `go mod download` go direct and are
+	// refused by the worker's own NetworkPolicy. NO_PROXY is the other half —
+	// without it the in-cluster router is sent to the proxy and the worker loses its
+	// own model rather than degrading.
+	It("forwards the proxy triple to the Claude child", func() {
+		app := &application{
+			HTTPProxy:  "http://egress-proxy:3128",
+			HTTPSProxy: "http://egress-proxy:3128",
+			NoProxy:    "localhost,127.0.0.1,.svc,claude-code-router-dev",
+		}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"HTTP_PROXY":  "http://egress-proxy:3128",
+			"HTTPS_PROXY": "http://egress-proxy:3128",
+			"NO_PROXY":    "localhost,127.0.0.1,.svc,claude-code-router-dev",
+		}))
+	})
+
+	It("omits the proxy triple when unset, leaving a laptop run unchanged", func() {
+		app := &application{ClaudeEnvRaw: "FOO=bar"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{"FOO": "bar"}))
+	})
+
+	// NO_PROXY is itself a comma-separated list, so it cannot ride the CLAUDE_ENV
+	// bag — envparse splits that on commas and would keep only the first entry,
+	// silently dropping every in-cluster bypass after it. This is why the triple
+	// has dedicated fields rather than being packed into the bag.
+	It("keeps a comma-separated NO_PROXY intact where CLAUDE_ENV would truncate it", func() {
+		app := &application{NoProxy: "a.example,b.example,c.example"}
+		Expect(app.buildClaudeEnv()["NO_PROXY"]).To(Equal("a.example,b.example,c.example"))
+	})
+
 	// The same gap, closed the same way. The pod's own environment carries the
 	// GitHub App triple, but the library's allowlist drops it before the child
 	// starts, so the `git` a worker runs would invoke the credential helper
@@ -516,6 +561,9 @@ var _ = Describe("application.newInteractiveService", func() {
 		// /a2a is gated: without the bearer token the gate answers 401 before the
 		// handler runs, and the assertion below would pass for the wrong reason.
 		request.Header.Set("Authorization", "Bearer test-token")
+		// a2a-go v2.7.0 rejects a call whose A2A-Version does not match the version
+		// the transport serves; an absent header is treated as "0.3".
+		request.Header.Set(a2a.SvcParamVersion, string(a2a.Version))
 		service.Handler().ServeHTTP(recorder, request)
 
 		Expect(recorder.Code).To(Equal(http.StatusOK))
@@ -593,6 +641,137 @@ var _ = Describe("application.newInteractiveService", func() {
 	})
 })
 
+// The agent provider is a package-level seam, so this spec stubs it for the
+// duration of the spec and restores the original afterwards — the same pattern
+// the inClusterNamespacePath specs use. The call under test is application.Run
+// itself: a test against a helper beside it would pass while the production
+// dereference stayed unguarded.
+var _ = Describe("application.Run nil result", func() {
+	var ctx context.Context
+	var originalCreateAgentProvider func(
+		claudelib.ClaudeConfigDir,
+		claudelib.AgentDir,
+		claudelib.AllowedTools,
+		claudelib.ClaudeModel,
+		map[string]string,
+		map[string]string,
+	) agentlib.AgentProvider
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		originalCreateAgentProvider = createAgentProvider
+		DeferCleanup(func() { createAgentProvider = originalCreateAgentProvider })
+	})
+
+	// A step whose ShouldRun is false makes StepRunner.Run return (nil, nil),
+	// which Agent.Run propagates as its own (nil, nil) — the exact library
+	// behaviour that reached the unguarded result.Status dereference.
+	It("returns a named error instead of panicking when the agent returns no result", func() {
+		step := &agentmocks.AgentStep{}
+		step.NameReturns("skipped")
+		step.ShouldRunReturns(false, nil)
+		provider := &agentmocks.AgentAgentProvider{}
+		provider.GetReturns(
+			agentlib.NewAgent(agentlib.NewPhase("execution", step)),
+			nil,
+		)
+		createAgentProvider = func(
+			_ claudelib.ClaudeConfigDir,
+			_ claudelib.AgentDir,
+			_ claudelib.AllowedTools,
+			_ claudelib.ClaudeModel,
+			_ map[string]string,
+			_ map[string]string,
+		) agentlib.AgentProvider {
+			return provider
+		}
+
+		app := &application{
+			Phase:          "execution",
+			TaskContent:    "# a task",
+			TaskType:       string(agentlib.TaskTypeLLM),
+			PushgatewayURL: "http://127.0.0.1:1",
+		}
+
+		// A panic here fails the spec through Ginkgo's own recovery, so one call
+		// proves both halves: no panic, and a named error instead of a result.
+		err := app.Run(ctx, nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("agent run returned no result"))
+	})
+
+	// The success path moved into recordAgentResult with the rest of the tail,
+	// so it needs a spec of its own now that Run no longer contains it.
+	It("returns nil and records the result when the agent run succeeds", func() {
+		step := &agentmocks.AgentStep{}
+		step.NameReturns("finish")
+		step.ShouldRunReturns(true, nil)
+		step.RunReturns(&agentlib.Result{
+			Status:    agentlib.AgentStatusDone,
+			NextPhase: "done",
+		}, nil)
+		provider := &agentmocks.AgentAgentProvider{}
+		provider.GetReturns(
+			agentlib.NewAgent(agentlib.NewPhase("execution", step)),
+			nil,
+		)
+		createAgentProvider = func(
+			_ claudelib.ClaudeConfigDir,
+			_ claudelib.AgentDir,
+			_ claudelib.AllowedTools,
+			_ claudelib.ClaudeModel,
+			_ map[string]string,
+			_ map[string]string,
+		) agentlib.AgentProvider {
+			return provider
+		}
+
+		app := &application{
+			Phase:          "execution",
+			TaskContent:    "# a task",
+			TaskType:       string(agentlib.TaskTypeLLM),
+			PushgatewayURL: "http://127.0.0.1:1",
+		}
+
+		Expect(app.Run(ctx, nil)).To(Succeed())
+	})
+
+	// The runErr != nil branch moved out of Run into recordAgentResult, so it
+	// needs its own spec now that it no longer sits in the covered function.
+	It("returns a wrapped agent error when the agent run fails", func() {
+		step := &agentmocks.AgentStep{}
+		step.NameReturns("boom")
+		step.ShouldRunReturns(true, nil)
+		step.RunReturns(nil, errors.New(ctx, "boom"))
+		provider := &agentmocks.AgentAgentProvider{}
+		provider.GetReturns(
+			agentlib.NewAgent(agentlib.NewPhase("execution", step)),
+			nil,
+		)
+		createAgentProvider = func(
+			_ claudelib.ClaudeConfigDir,
+			_ claudelib.AgentDir,
+			_ claudelib.AllowedTools,
+			_ claudelib.ClaudeModel,
+			_ map[string]string,
+			_ map[string]string,
+		) agentlib.AgentProvider {
+			return provider
+		}
+
+		app := &application{
+			Phase:          "execution",
+			TaskContent:    "# a task",
+			TaskType:       string(agentlib.TaskTypeLLM),
+			PushgatewayURL: "http://127.0.0.1:1",
+		}
+
+		err := app.Run(ctx, nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("agent run failed"))
+	})
+})
+
 var _ = Describe("inClusterNamespace", func() {
 	It("reads the namespace and trims the trailing newline", func() {
 		path := filepath.Join(GinkgoT().TempDir(), "namespace")
@@ -638,7 +817,7 @@ var _ = Describe("buildHeartbeatPublisher", func() {
 
 		publisher, err := buildHeartbeatPublisher(
 			context.Background(),
-			&k8smocks.K8sInterface{},
+			&fakeK8sInterface{},
 			heartbeat.NewActivityRecorder(libtime.NewCurrentDateTime()),
 			libtime.NewCurrentDateTime(),
 		)
@@ -654,7 +833,7 @@ var _ = Describe("buildHeartbeatPublisher", func() {
 
 		publisher, err := buildHeartbeatPublisher(
 			context.Background(),
-			&k8smocks.K8sInterface{},
+			&fakeK8sInterface{},
 			heartbeat.NewActivityRecorder(libtime.NewCurrentDateTime()),
 			libtime.NewCurrentDateTime(),
 		)

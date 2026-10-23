@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## v0.24.0
+
+- feat: forward `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to the Claude child. `github.com/bborbe/agent` replaces the child environment with a fixed allowlist (`HOME`, `PATH`, `USER`, `TZ`, `ZONEINFO`, `TMPDIR`, `LANG`, `LC_ALL`), so a proxy set only on the pod never reached the Bash tool — and therefore never reached `git`, the Go toolchain, `govulncheck`, `osv-scanner` or `trivy`, the processes that actually need it. A worker behind an egress proxy was silently unproxied, and every clone and module fetch was refused by its own NetworkPolicy. `NO_PROXY` matters as much as the other two: without it an in-cluster endpoint (the model router, the attention store, the vault writer) is sent to the proxy and refused, so the worker loses its own model rather than degrading. ⚠️ The three have dedicated fields rather than riding `CLAUDE_ENV` because that bag splits on commas and `NO_PROXY` is itself a comma-separated list — packing it there keeps only the first entry and silently drops every in-cluster bypass after it.
+
+## v0.23.0
+
+- feat: warm the Go build cache in the runtime image by running each check tool's own `go run pkg@$(VERSION)` once at build time (`golangci-lint` v2.14.0, `govulncheck` v1.3.0, `osv-scanner` v2.6.0), so a fresh k8s A2A pod's first `make check` is a cache hit rather than a from-source compile — measured 601 s cold (cancelled at the interactive server's 10-minute write deadline) against 70 s warm. `make check` invokes these as `go run`, which never consults an installed binary, so baking the binaries alone would not have removed the compile. Versions pin to `bborbe/go-skeleton`'s canonical `tools.env`; the cache is keyed by those pins, the Go version and `CGO_ENABLED=0`, matching the pod's env.
+
+## v0.22.3
+
+- chore: update github.com/bborbe/agent to v0.117.0
+
+## v0.22.2
+
+- chore: update github.com/a2aproject/a2a-go/v2 to v2.7.0, github.com/bborbe/agent to v0.114.0, github.com/bborbe/argument/v2 to v2.13.6, github.com/bborbe/cqrs to v0.6.12, github.com/bborbe/errors to v1.6.3, github.com/bborbe/k8s to v1.14.23, github.com/bborbe/kafka to v1.28.5, github.com/bborbe/run to v1.11.2, github.com/bborbe/sentry to v1.10.5, github.com/bborbe/service to v1.11.1, github.com/bborbe/time to v1.27.18, github.com/bborbe/vault-cli to v0.177.0, github.com/onsi/ginkgo/v2 to v2.33.1, github.com/onsi/gomega to v1.44.0, github.com/prometheus/client_golang to v1.25.0, k8s.io/api to v0.38.0-alpha.2, k8s.io/apimachinery to v0.38.0-alpha.2
+
+## v0.22.1
+
+- fix: guard `application.Run` against a nil result from `agent.Run` — the run dereferenced `result.Status` without checking it, so the `(nil, nil)` that `github.com/bborbe/agent` returns when every step of a phase is skipped panicked the binary and burned a Job attempt; the tail of `Run` now lives in `recordAgentResult`, which records a failed run and returns a named `agent run returned no result` error instead, and the agent provider is reachable through the package-level `createAgentProvider` seam so a spec drives the production call site rather than a helper beside it.
+- chore: bump Go to 1.27.3 in `go.mod` and the `Dockerfile` build stage so `govulncheck` clears `GO-2026-6809`, which fails the vulncheck gate for every merge while the module sits on 1.27.1.
+
 ## v0.22.0
 
 - feat: give a cluster worker a way to close its own vault task row — the pod could already write vault files but had no verb to move a row's `status` to `completed`, so `agent/scripts/vault-complete.sh <repo-relative-path>` now GETs the file, sets the `status` key in its YAML frontmatter to `completed` and POSTs the whole file back so the `git-rest` service commits and pushes it; the change is scoped to the frontmatter block — a body line that merely looks like `status:` is never touched — and a missing, duplicate or unclosed frontmatter fails loudly instead of guessing, and its fixture-driven test runs on every `make precommit` through the `shell-test` target's `agent/scripts/*_test.sh` glob.
