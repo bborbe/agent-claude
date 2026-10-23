@@ -140,6 +140,15 @@ type application struct {
 	GitHubAppInstallationID string `required:"false" arg:"github-app-installation-id" env:"GITHUB_APP_INSTALLATION_ID" usage:"GitHub App installation id forwarded to the Claude child"`
 	GitHubAppPEM            string `required:"false" arg:"github-app-pem"             env:"GITHUB_APP_PEM"             usage:"GitHub App private key forwarded to the Claude child"     display:"length"`
 
+	// GHToken is the GitHub CLI's credential, minted by the image's entrypoint from
+	// the App above and forwarded for the same reason as the three: the library
+	// replaces the child environment with a fixed allowlist, so an exported GH_TOKEN
+	// never reaches the Bash tool, and `gh` would run unauthenticated — every call
+	// failing 401 while the pod's own environment plainly carried the token. It is a
+	// separate field rather than a CLAUDE_ENV entry because that bag is displayed in
+	// the startup log, and this value is a live credential.
+	GHToken string `required:"false" arg:"gh-token" env:"GH_TOKEN" usage:"GitHub CLI token forwarded to the Claude child" display:"length"`
+
 	// Branch for Kafka result delivery
 	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
 
@@ -355,6 +364,12 @@ func (a *application) buildClaudeEnv() map[string]string {
 	}
 	if a.GitHubAppPEM != "" {
 		claudeEnv["GITHUB_APP_PEM"] = a.GitHubAppPEM
+	}
+	// The CLI token the entrypoint minted from the App above. Same reason as the
+	// three: the library's allowlist drops it before the child starts, so `gh`
+	// would run unauthenticated however carefully the pod exported it.
+	if a.GHToken != "" {
+		claudeEnv["GH_TOKEN"] = a.GHToken
 	}
 	return claudeEnv
 }

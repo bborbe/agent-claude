@@ -220,9 +220,26 @@ var _ = Describe("application startup argument log", func() {
 		Expect(output).NotTo(ContainSubstring(sentinel))
 	})
 
+	It("reports the GitHub CLI token as a length, never its value", func() {
+		const sentinel = "sentinel-gh-token-4d18"
+
+		var buffer bytes.Buffer
+		log.SetOutput(&buffer)
+		DeferCleanup(func() { log.SetOutput(os.Stderr) })
+
+		app := &application{GHToken: sentinel}
+		Expect(argument.Print(context.Background(), app)).To(Succeed())
+
+		output := buffer.String()
+		Expect(output).To(ContainSubstring("GHToken"))
+		Expect(output).To(ContainSubstring(
+			fmt.Sprintf("GHToken length %d", len(sentinel)),
+		))
+		Expect(output).NotTo(ContainSubstring(sentinel))
+	})
+
 	// Either bag can carry a credential: buildClaudeEnv sources
-	// ANTHROPIC_AUTH_TOKEN from CLAUDE_ENV when its dedicated field is empty.
-	// The second bag deliberately uses a key name no marker heuristic would
+	// ANTHROPIC_AUTH_TOKEN from CLAUDE_ENV when its dedicated field is empty.	// The second bag deliberately uses a key name no marker heuristic would
 	// flag, so this spec distinguishes key-names-only from a
 	// marker-based redaction that would leave an innocuously named secret in
 	// the log.
@@ -274,6 +291,16 @@ var _ = Describe("application.buildClaudeEnv", func() {
 			"ANTHROPIC_AUTH_TOKEN": "secret",
 			"ANTHROPIC_MODEL":      "sonnet",
 			"FOO":                  "bar",
+		}))
+	})
+
+	It("forwards the dedicated GitHub CLI token to the child", func() {
+		// Without this the pod's exported GH_TOKEN stops at the library's allowlist
+		// and `gh` runs unauthenticated — a 401 on every call, from a pod whose own
+		// environment plainly carries the token.
+		app := &application{GHToken: "ghs_token"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"GH_TOKEN": "ghs_token",
 		}))
 	})
 

@@ -62,6 +62,14 @@ RUN chmod 0755 /usr/local/bin/pod-attention.py
 # that is the name `git` looks for: there is no second executable and no alias.
 COPY scripts/git_credential_github_app.py /usr/local/bin/git-credential-github-app
 RUN chmod 0755 /usr/local/bin/git-credential-github-app
+# `gh-token` prints an installation token for GH_TOKEN, importing the minting
+# functions from the helper above rather than reimplementing them — so `git` and
+# `gh` cannot drift apart on how the App is exchanged. `entrypoint.sh` is what
+# calls it and is why `gh` is authenticated at all; see that file for why it
+# degrades instead of failing when no App credential is present.
+COPY scripts/gh-token /usr/local/bin/gh-token
+COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 0755 /usr/local/bin/gh-token /usr/local/bin/entrypoint.sh
 # Point `git` at the helper for github.com over HTTPS. This is a BUILD-time
 # configuration, not a runtime one: agent/.claude/CLAUDE.md § Forbidden forbids a
 # worker from modifying system config, so a worker cannot be asked to run
@@ -158,7 +166,39 @@ RUN CGO_ENABLED=0 go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@
  && CGO_ENABLED=0 go run golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} -version \
  && CGO_ENABLED=0 go run github.com/google/osv-scanner/v2/cmd/osv-scanner@${OSV_SCANNER_VERSION} --version
 
+# `gh` is the GitHub CLI, and it is the reason this image can drive GitHub at all
+# without a bespoke client per lane. Alpine packages it, but as with `trivy` the
+# release tarball is used instead: the version is then PINNED here rather than
+# following whatever the base image's repo happens to carry on a rebuild, and an
+# agent whose behaviour depends on a `gh` flag cannot have that flag appear or
+# vanish under an unrelated `apk` bump.
+#
+# ⚠️ `gh --version` runs at BUILD time on purpose, for the same reason
+# `trivy --version` does: it proves the binary executes on musl, not merely that
+# the download landed. A tarball that extracts but cannot run would otherwise
+# surface only when a pod first calls `gh`, as an environment failure that reads
+# like a tooling bug.
+#
+# ⚠️ The binary alone authenticates nothing. `gh-token` + `entrypoint.sh` mint
+# GH_TOKEN from the App credential; without them `gh` runs unauthenticated and
+# every call 401s. The two changes belong together.
+# ⚠️ `--strip-components=2`, not 1. The archive's members are rooted at
+# `gh_${GH_VERSION}_linux_amd64/`, and the binary sits one level deeper at
+# `.../bin/gh` — so stripping only the versioned root extracts it to
+# `/usr/local/bin/bin/gh`, and the `test -x` below then fails and aborts the
+# build. CI runs `make precommit`, which does not build the image, so nothing
+# catches this until a release build; the assertion is what makes it loud then
+# rather than at pod start.
+ARG GH_VERSION=2.103.0
+RUN curl -sSfL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
+      | tar -xz --strip-components=2 -C /usr/local/bin "gh_${GH_VERSION}_linux_amd64/bin/gh" \
+ && test -x /usr/local/bin/gh \
+ && gh --version
+
 ENV BUILD_GIT_VERSION=${BUILD_GIT_VERSION}
 ENV BUILD_GIT_COMMIT=${BUILD_GIT_COMMIT}
 ENV BUILD_DATE=${BUILD_DATE}
-ENTRYPOINT ["/main", "-v=2"]
+# The wrapper mints GH_TOKEN (when an App credential is present) and then
+# `exec`s /main with the arguments below, so it adds one step and changes nothing
+# else: the same binary, the same `-v=2`, the same signal handling.
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh", "-v=2"]
