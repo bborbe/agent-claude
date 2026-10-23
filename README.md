@@ -108,6 +108,7 @@ the ConfigMap — granted in the config repo, not here.
 | `POD_ATTENTION_STORE_URL` | no | — | Attention store base URL forwarded to the Claude CLI subprocess; omitted when unset |
 | `POD_ATTENTION_TOKEN` | no | — | Attention store bearer token forwarded to the Claude CLI subprocess; omitted when unset, redacted from the startup log |
 | `KAFKA_BROKERS` | no | — | Required when `TASK_ID` is set |
+| `TASK_TYPE` | yes (unless `AGENT_TYPE=service`) | `unknown` | Task type the executor stamps for dispatch and metric grouping: one of `llm`, `healthcheck`, `oauth-probe`. A task-routed job whose value is empty or unset fails fast; the task publisher must stamp it |
 | `SENTRY_DSN` | no | — | Error reporting |
 
 ## Creating a New Agent

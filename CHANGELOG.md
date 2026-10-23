@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: fail fast when a task-routed job arrives without a stamped `task_type` — `main.go` gains `validateTaskType`, called from `application.Run` after the `AGENT_TYPE=service` early return and before the provider is built, so a job whose `TASK_TYPE` is empty or absent now returns an actionable error naming the variable, the task publisher (`task/executor`) and the `agent.TaskType*` constants instead of the generic `unknown task_type` map miss; both arrival paths are covered (`TASK_TYPE=` present-but-empty overrides the flag's default, an absent `TASK_TYPE` falls back to the `unknown` default tag), the error for a genuinely unknown non-empty value is left unchanged at the provider so it still lists the accepted types, and nothing falls back to any agent — an empty task type is never routed to the LLM agent, so the wrong workload cannot run.
+
 ## v0.24.0
 
 - feat: forward `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` to the Claude child. `github.com/bborbe/agent` replaces the child environment with a fixed allowlist (`HOME`, `PATH`, `USER`, `TZ`, `ZONEINFO`, `TMPDIR`, `LANG`, `LC_ALL`), so a proxy set only on the pod never reached the Bash tool — and therefore never reached `git`, the Go toolchain, `govulncheck`, `osv-scanner` or `trivy`, the processes that actually need it. A worker behind an egress proxy was silently unproxied, and every clone and module fetch was refused by its own NetworkPolicy. `NO_PROXY` matters as much as the other two: without it an in-cluster endpoint (the model router, the attention store, the vault writer) is sent to the proxy and refused, so the worker loses its own model rather than degrading. ⚠️ The three have dedicated fields rather than riding `CLAUDE_ENV` because that bag splits on commas and `NO_PROXY` is itself a comma-separated list — packing it there keeps only the first entry and silently drops every in-cluster bypass after it.

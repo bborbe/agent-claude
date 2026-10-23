@@ -100,8 +100,8 @@ type application struct {
 	// ⚠️ These are dedicated fields rather than CLAUDE_ENV entries because CLAUDE_ENV
 	// is a comma-separated bag and NO_PROXY is itself a comma-separated list — packing
 	// it there would truncate it to its first entry and silently drop the rest.
-	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"  display:"length"`
-	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child" display:"length"`
+	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"        display:"length"`
+	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child"       display:"length"`
 	NoProxy    string `required:"false" arg:"no-proxy"    env:"NO_PROXY"    usage:"Proxy bypass list forwarded to the Claude child" display:"length"`
 
 	// Attention-store credentials, forwarded to the Claude child rather than kept
@@ -249,6 +249,12 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		)
 	}
 
+	if err := validateTaskType(ctx, agentlib.TaskType(a.TaskType)); err != nil {
+		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
+		jobMetrics.RecordDuration(time.Since(start))
+		return errors.Wrap(ctx, err, "validate task_type")
+	}
+
 	provider := createAgentProvider(
 		a.ClaudeConfigDir,
 		a.AgentDir,
@@ -357,6 +363,37 @@ func (a *application) buildClaudeEnv() map[string]string {
 		claudeEnv["GITHUB_APP_PEM"] = a.GitHubAppPEM
 	}
 	return claudeEnv
+}
+
+// taskTypeUnset is the value the TaskType flag's default tag supplies when
+// TASK_TYPE is absent. It is a metrics-grouping placeholder, never a
+// dispatched task type: the dispatch table registers only llm, healthcheck
+// and oauth-probe. It must stay equal to the value in the TaskType field's
+// `default` tag.
+const taskTypeUnset agentlib.TaskType = "unknown"
+
+// validateTaskType rejects a task_type the publisher never stamped. Both the
+// empty string (TASK_TYPE present but empty) and the flag's default (TASK_TYPE
+// absent) are map misses in the dispatch table, so without this guard the
+// operator sees a generic "unknown task_type" error that names neither the
+// missing environment variable nor the component that must set it. A
+// genuinely unknown non-empty value is left to the provider, whose error
+// lists the accepted types.
+func validateTaskType(ctx context.Context, taskType agentlib.TaskType) error {
+	switch taskType {
+	case "":
+		return errors.Errorf(
+			ctx,
+			"TASK_TYPE is empty; the task publisher (task/executor) must stamp one of the agent.TaskType* constants before dispatching a job to agent-claude",
+		)
+	case taskTypeUnset:
+		return errors.Errorf(
+			ctx,
+			"TASK_TYPE is unset (default %q); the task publisher (task/executor) must stamp one of the agent.TaskType* constants before dispatching a job to agent-claude",
+			string(taskTypeUnset),
+		)
+	}
+	return nil
 }
 
 // runService is the long-running half of this binary. A service agent has no
