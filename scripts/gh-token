@@ -23,6 +23,7 @@ no App credential at all.
 import importlib.util
 import os
 import sys
+from importlib.machinery import SourceFileLoader
 
 _HELPER_CANDIDATES = (
     "/usr/local/bin/git-credential-github-app",
@@ -31,14 +32,25 @@ _HELPER_CANDIDATES = (
 
 
 def _load_helper():
+    """Load the credential helper by PATH, whatever its filename.
+
+    ⚠️ `importlib.util.spec_from_file_location` cannot be used here, and the
+    failure is silent rather than loud: it returns **None** when the path carries
+    no recognised source suffix, which is exactly the image's case — the helper is
+    installed as `/usr/local/bin/git-credential-github-app`, with no `.py`,
+    because that is the name `git` looks for. The probe would then skip the image
+    copy, fall through to a source-tree sibling that does not exist in the image,
+    and report "not found" — from a file that is present and readable.
+    `SourceFileLoader` takes the path directly and has no suffix requirement, so
+    the extensionless name loads the same way the `.py` one does.
+    """
     for path in _HELPER_CANDIDATES:
         if not os.path.exists(path):
             continue
-        spec = importlib.util.spec_from_file_location("git_credential_github_app", path)
-        if spec is None or spec.loader is None:
-            continue
+        loader = SourceFileLoader("git_credential_github_app", path)
+        spec = importlib.util.spec_from_loader(loader.name, loader)
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        loader.exec_module(module)
         return module
     raise SystemExit("gh-token: git-credential-github-app not found")
 

@@ -277,6 +277,16 @@ var _ = Describe("application.buildClaudeEnv", func() {
 		}))
 	})
 
+	It("forwards the dedicated GitHub CLI token to the child", func() {
+		// Without this the pod's exported GH_TOKEN stops at the library's allowlist
+		// and `gh` runs unauthenticated — a 401 on every call, from a pod whose own
+		// environment plainly carries the token.
+		app := &application{GHToken: "ghs_token"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"GH_TOKEN": "ghs_token",
+		}))
+	})
+
 	// The library replaces the child environment with a fixed allowlist, so a pod
 	// whose own env carries the attention store still leaves its Claude child
 	// unable to reach it — the poster falls back to localhost:18080, where nothing
