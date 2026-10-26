@@ -23,7 +23,11 @@ branch: dark-factory/build-target-remote-build
 
 `make build BUILD_TARGET=local` and `make build BUILD_TARGET=<cluster>` both produce an image from the same ref — the same commit when `REF` names `HEAD` — and the local path keeps working exactly as it does today. On the cluster arm the build runs as a Job in the target cluster, pushes `docker.io/bborbe/agent-claude` under the account the pod holds, and leaves no image on the invoking machine.
 
-Cross-arm digest equality is **not** a goal. The reference Job passes only the commit epoch as a build arg, so a cluster-built image carries the Dockerfile's `dev` / `none` / `unknown` version defaults while the local arm stamps real values; the two arms are equivalent in where they build, not in the bytes they emit. That divergence is recorded as a gap, not closed here.
+Cross-arm digest equality is **not** a goal, and was not a goal of this change. The version
+labels were a separate gap that the reference now closes: with `REF=<tag>` a cluster-built image
+stamps `org.opencontainers.image.version` from the cloned tree, so the two arms agree on the
+version label. They still do not agree on the bytes, and `BUILD_GIT_COMMIT` / `BUILD_DATE` are
+still not forwarded.
 
 ## Non-goals
 
@@ -32,7 +36,7 @@ Cross-arm digest equality is **not** a goal. The reference Job passes only the c
 - **Not a change to `bborbe/go-skeleton`.** The reference implementation is copied, not forked, and `go-skeleton` is not edited.
 - **Not a release.** Verification runs on a scratch `VERSION`; the release is cut by the maintainer after merge.
 - **Not a persistent build cache.** Every remote build pays the cold-cache cost; that is the reference design and is not changed here.
-- **Not the version-label gap.** Making a cluster build stamp `BUILD_GIT_VERSION` / `BUILD_GIT_COMMIT` / `BUILD_DATE` requires the reference `hack/build-job.yaml` to pass three more build args. Editing it would fork the reference, so the gap is recorded for the fleet task instead.
+- **The version-label gap — closed upstream, not by a local edit.** A cluster build now stamps `org.opencontainers.image.version` from the cloned tree: `bborbe/go-skeleton#148` added `--tags` to the clone fetch and forwards `BUILD_GIT_VERSION`, and this repo re-vendored at `3c5fed83`, so the byte-identity invariant holds rather than being forked. `BUILD_GIT_COMMIT` and `BUILD_DATE` are still not forwarded, so `.created` / `.revision` keep their defaults on this arm — that remainder is recorded for the fleet task, not fixed here.
 - **Not base-image pinning.** The final stage's unqualified `FROM alpine` is a pre-existing reproducibility defect. It is recorded, not fixed here.
 - **Not `make generatek8s`.** It invokes `hack/update-codegen.sh`, which does not exist and is not among the five files this change vendors. That breakage predates this change and stays.
 
@@ -41,7 +45,7 @@ Cross-arm digest equality is **not** a goal. The reference Job passes only the c
 - [ ] The five cluster-build scripts are byte-identical copies of the pinned reference, and no other file sits under `hack/` — evidence: `ls hack/ | wc -l` returns 5, and this loop exits 0:
   ```
   for f in build-cluster.sh build-cluster-bootstrap.sh build-job.yaml cluster-alias.sh dockerconfig.json.tpl; do
-    curl -sSfL "https://raw.githubusercontent.com/bborbe/go-skeleton/18866d9d6b0d6159829f7a9e825232608067fee7/hack/$f" | diff - "hack/$f" || exit 1
+    curl -sSfL "https://raw.githubusercontent.com/bborbe/go-skeleton/3c5fed839514108ca5e56337d381adb562ecf604/hack/$f" | diff - "hack/$f" || exit 1
   done
   ```
   A stub file, or any local edit to a vendored script, fails this diff.
@@ -75,7 +79,7 @@ Note that CI never builds the image — `.github/workflows/ci.yml` runs only `ma
 
 Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconfig for the target cluster, `crane`, `teamvault-cli` with a login for the account holding the registry key, and `docker login` as `bborbe` for the local arm's push.
 
-- `for f in build-cluster.sh build-cluster-bootstrap.sh build-job.yaml cluster-alias.sh dockerconfig.json.tpl; do diff <(git show HEAD:hack/$f) <(git -C "${GO_SKELETON:?set GO_SKELETON to a local go-skeleton checkout}" show 18866d9d6b0d6159829f7a9e825232608067fee7:hack/$f) || echo "DIFF $f"; done` — prints nothing. `GO_SKELETON` names a local `bborbe/go-skeleton` checkout and has no default, so the rung fails loudly rather than resolving against the wrong repository; where no checkout exists, the container-side equivalent is the pinned raw-URL fetch in Constraints, and AC 1's `curl | diff` is the same proof. **Do not hard-code a home-directory path here** — this rung has to run on whatever machine is doing the migration.
+- `for f in build-cluster.sh build-cluster-bootstrap.sh build-job.yaml cluster-alias.sh dockerconfig.json.tpl; do diff <(git show HEAD:hack/$f) <(git -C "${GO_SKELETON:?set GO_SKELETON to a local go-skeleton checkout}" show 3c5fed839514108ca5e56337d381adb562ecf604:hack/$f) || echo "DIFF $f"; done` — prints nothing. `GO_SKELETON` names a local `bborbe/go-skeleton` checkout and has no default, so the rung fails loudly rather than resolving against the wrong repository; where no checkout exists, the container-side equivalent is the pinned raw-URL fetch in Constraints, and AC 1's `curl | diff` is the same proof. **Do not hard-code a home-directory path here** — this rung has to run on whatever machine is doing the migration.
 - `hack/build-cluster-bootstrap.sh <cluster>` — exits 0, and `KUBECONFIG=~/.kube/<cluster> kubectl --context <ctx> -n build get secret -o name` lists `buildkit-push` (names only, never values)
 - `ALLOW_UNTAGGED_BUILD=1 VERSION=proof make build BUILD_TARGET=local` twice, comparing the two images rather than their IDs: `docker run --rm <id> sha256sum /main` prints the same digest both times, and `docker image inspect -f '{{json .Config}}' <id>` prints the same config. The image IDs themselves will differ — see the Constraint on the warm build cache.
 - `ALLOW_UNTAGGED_BUILD=1 VERSION=proof REF=<branch> make build BUILD_TARGET=<cluster>` — exits 0 and prints a digest; `crane digest docker.io/bborbe/agent-claude:proof` returns that digest
@@ -94,8 +98,8 @@ Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconf
 
 ## Constraints
 
-- **`hack/` is a verbatim copy of `bborbe/go-skeleton` at `18866d9d6b0d6159829f7a9e825232608067fee7`** — `build-cluster.sh`, `build-cluster-bootstrap.sh`, `build-job.yaml`, `cluster-alias.sh`, `dockerconfig.json.tpl`. No local edit. A repo-specific need is expressed in the Makefile variables the script reads, never in the script; that is what keeps this spec reusable for the next repo.
-- **The container cannot read the go-skeleton checkout.** The dark-factory container mounts only this repo, runs with `.git` masked and has no Docker daemon, so the five files are fetched from `https://raw.githubusercontent.com/bborbe/go-skeleton/18866d9d6b0d6159829f7a9e825232608067fee7/hack/<file>` and the three shell scripts made executable. The pinned commit is what makes the copy reproducible, and AC 1's `curl | diff` is what proves it is byte-identical.
+- **`hack/` is a verbatim copy of `bborbe/go-skeleton` at `3c5fed839514108ca5e56337d381adb562ecf604`** — `build-cluster.sh`, `build-cluster-bootstrap.sh`, `build-job.yaml`, `cluster-alias.sh`, `dockerconfig.json.tpl`. No local edit. A repo-specific need is expressed in the Makefile variables the script reads, never in the script; that is what keeps this spec reusable for the next repo.
+- **The container cannot read the go-skeleton checkout.** The dark-factory container mounts only this repo, runs with `.git` masked and has no Docker daemon, so the five files are fetched from `https://raw.githubusercontent.com/bborbe/go-skeleton/3c5fed839514108ca5e56337d381adb562ecf604/hack/<file>` and the three shell scripts made executable. The pinned commit is what makes the copy reproducible, and AC 1's `curl | diff` is what proves it is byte-identical.
 - **The reference's `BUILD_*` variables are declared in full — except the namespace** — `BUILD_TARGET`, `BUILD_TIMEOUT`, `BUILD_REPO_URL`, `BUILD_DOCKERFILE`, `BUILD_PUSH_SECRET`, `REF`, `SOURCE_DATE_EPOCH`, `BUILD_DATE` — for parity with the reference, so this spec renders against the next repo unchanged. `build-cluster.sh` supplies defaults for four of them; declaring them here is what lets an operator override one without editing the script. **`BUILD_NAMESPACE` is deliberately absent**: the vendored `hack/build-job.yaml` hardcodes `namespace: build` while `build-cluster.sh` polls whatever namespace it is handed, so an override creates the Job in `build` and polls elsewhere until the 3600 s deadline expires — a silent stall that reads as a hung build. Until the manifest is templated upstream, the namespace is fixed and the script's own default applies.
 - **The cluster arm must refuse a release-shaped tag built from a different ref, and refuse an unset `VERSION`.** `Makefile` defaults `VERSION` to the latest release tag (`git describe --tags $(git rev-list --tags --max-count=1)`), and the cluster arm pushes with `PUSH=true`. Unguarded, `make build BUILD_TARGET=<cluster> REF=<branch>` would push `vX.Y.Z` **built from that branch** over the published release image — destroying a release with a commit that was never released. The guard requires `VERSION` to be set explicitly (`$(origin VERSION)` must not be `file`) and refuses a `vX.Y.Z` whose `REF` is not that same tag.
   ⚠️ **This guard replaces `check-version-tag` on the cluster arm, and it cannot be shared with the local arm.** `check-version-tag` asserts the *local HEAD* sits at the tag it claims to build; the cluster builds `REF`, which need not be HEAD. Running it there would validate the wrong commit — which is why the prerequisites are local-arm only — and dropping it there without this guard is what opens the hole it closed. Any future refactor that re-shares the prerequisites must keep one of the two.
@@ -128,7 +132,7 @@ Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconf
 | docker.io rate-limits or is unavailable during a build | Both arms fail at a base-image pull; the cluster arm fails inside the Job and the local arm fails before the build starts | Wait out the window, or authenticate the pull; the base images are version-pinned, so a retry is safe |
 | `VERSION` names a tag that is not `HEAD` and `ALLOW_UNTAGGED_BUILD` is unset | `check-version-tag` exits 1 naming both the HEAD tag and the requested version | Build from the tag, or set `ALLOW_UNTAGGED_BUILD=1` for a scratch build |
 | `vendor/` is absent in the cluster clone | The Dockerfile's `go build` downloads modules instead of failing | None needed; this is the behaviour the change establishes |
-| The pinned raw URL is unreachable from the container | The fetch step fails and no `hack/` file is written | Operator copies the five files from the local `go-skeleton` checkout at `18866d9d` into `hack/`, then re-runs the prompt |
+| The pinned raw URL is unreachable from the container | The fetch step fails and no `hack/` file is written | Operator copies the five files from the local `go-skeleton` checkout at `3c5fed83` into `hack/`, then re-runs the prompt |
 
 ## Security / Abuse Cases
 
