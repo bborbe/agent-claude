@@ -70,7 +70,7 @@ Make `make build` dispatch on `BUILD_TARGET`: keep the default `local` arm on `d
 </objective>
 
 <context>
-Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `autoRelease: false`, `validationPrompt: docs/dod.md`; the effective config resolves `validationCommand: make precommit`.
+Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `validationPrompt: docs/dod.md`; the effective config resolves `autoRelease=false`, `hideGit=true` and `validationCommand: make precommit` (the first two come from the daemon's `--set` flags, not the file).
 
 Read the spec at `specs/in-progress/006-build-target-remote-build.md` — Desired Behavior 1, 3 and 5, Constraints, Failure Modes, and Acceptance Criteria 3–7 — because you have no other memory of it.
 
@@ -195,7 +195,7 @@ Coding guides (in-container paths):
 - **`SOURCE_DATE_EPOCH` needs no `ARG` in the Dockerfile.** BuildKit's dockerfile frontend reads it from the build-arg set to drive the exporter's `rewrite-timestamp`, which is what the two-build image-ID equality measures. Do not add an `ARG` for it in this prompt (prompt 4 touches the Dockerfile, and only for the two documented lines).
 - **The push credential is never inlined.** The cluster arm passes `PUSH_SECRET='$(BUILD_PUSH_SECRET)'` — a Secret *name*. Do not pass a value, do not read a credential, and do not add a `docker login` step.
 - **`apply` deploys nothing and stays a no-op.** Do not touch it; the spec's Constraints record that `make build upload clean` and `make buca` have the same effect here.
-- **No `git` command anywhere in `<verification>`.** `.git` is masked in this container (`hideGit=true`) and every `git` invocation fails. The `$(shell git …)` calls inside `Makefile.docker` are part of the build recipe and are never executed by `make -n` or `make precommit`; that is fine.
+- **No `git` command anywhere in `<verification>`.** `.git` is masked in this container (`hideGit=true`) and every `git` invocation fails. The `$(shell git …)` calls inside `Makefile.docker` are expanded by `make -n` (they fill `SOURCE_DATE_EPOCH`, `BUILD_DATE` and `VERSION`) and resolve to empty under the masked `.git`; that is fine.
 - Do NOT commit — dark-factory handles git.
 - Do NOT run `docker`, `make build`, `make buca`, `kubectl`, `hack/*.sh` or `scripts/*.sh` — this container has no Docker socket, no cluster credentials and no host tooling. Use `make -n` (dry run) only.
 - Change ONLY `Makefile.docker`. Do NOT touch `Makefile`, `Makefile.precommit`, `Makefile.variables`, `Dockerfile`, `CHANGELOG.md`, `docs/`, `hack/`, `go.mod`, `go.sum` or any `.go` file.
@@ -206,7 +206,7 @@ Coding guides (in-container paths):
 <verification>
 Run each command from the repository root and confirm the stated result. `ROOTDIR=/workspace` pins the repository root explicitly, as every prompt in this repository does, because `Makefile.variables` resolves `ROOTDIR` from a repository-root probe that does not work under this container's masked `.git`.
 
-A note on reading the results: absence checks are written as `! grep -q …`, which prints nothing and exits 0 when the string is absent — that exit 0 is the expected result. `grep -c` is used only where the expected count is non-zero. The `make -n` commands render recipes without executing them, so no Docker daemon or cluster is needed; they still exit 0. Under this container's masked `.git` they also print `fatal: not a git repository (or any of the parent directories): .git` on stderr, twice per run, from the `$(shell git log …)` calls that fill `SOURCE_DATE_EPOCH` and `BUILD_DATE`. That is expected noise from the masked repository, not a failure: the exit code is 0, `VERSION` expands empty, and none of the assertions below depends on either value.
+A note on reading the results: absence checks are written as `! grep -q …`, which prints nothing and exits 0 when the string is absent — that exit 0 is the expected result. `grep -c` is used only where the expected count is non-zero. The `make -n` commands render recipes without executing them, so no Docker daemon or cluster is needed; they still exit 0. Under this container's masked `.git` they also print `fatal: not a git repository (or any of the parent directories): .git` on stderr, four lines per run: two from the `$(shell git log …)` calls that fill `SOURCE_DATE_EPOCH` and `BUILD_DATE`, and two from the parse-time `git describe` / `git rev-list` in `Makefile`'s `VERSION` fallback. That is expected noise from the masked repository, not a failure: the exit code is 0, `VERSION` expands empty, and none of the assertions below depends on either value.
 
 1. `test -f hack/build-cluster.sh && echo present` — prints `present` (the ship-order guard for prompt 1).
 2. `grep -c 'BUILD_TARGET ?= local' Makefile.docker` — prints `1`.
@@ -215,19 +215,19 @@ A note on reading the results: absence checks are written as `! grep -q …`, wh
 5. `grep -c 'hack/build-cluster.sh' Makefile.docker` — prints `1`.
 6. `grep -c 'rewrite-timestamp=true,unpack=false' Makefile.docker` — prints `1`.
 7. `grep -c -- '--provenance=false' Makefile.docker` — prints `1`; `grep -c -- '--sbom=false' Makefile.docker` — prints `1`.
-8. `grep -c -- '^[[:space:]]*--no-cache' Makefile.docker` — prints `1`; `grep -c -- '^[[:space:]]*--pull' Makefile.docker` — prints `0` (the anchored forms, so a comment that names `--pull` neither satisfies nor breaks them — which is also why requirement 2 forbids the string in comments).
-9. `grep -c -- '--rm=true' Makefile.docker` — prints `0`.
-10. `grep -c 'date -u' Makefile.docker` — prints `0`; `grep -c 'SOURCE_DATE_EPOCH ?=' Makefile.docker` — prints `1`; `grep -c 'BUILD_DATE ?=' Makefile.docker` — prints `1`.
+8. `grep -c -- '^[[:space:]]*--no-cache' Makefile.docker` — prints `1`; `! grep -q -- '^[[:space:]]*--pull' Makefile.docker` — exits 0 (the anchored forms, so a comment that names `--pull` neither satisfies nor breaks them — which is also why requirement 2 forbids the string in comments).
+9. `! grep -q -- '--rm=true' Makefile.docker` — exits 0.
+10. `! grep -q 'date -u' Makefile.docker` — exits 0; `grep -c 'SOURCE_DATE_EPOCH ?=' Makefile.docker` — prints `1`; `grep -c 'BUILD_DATE ?=' Makefile.docker` — prints `1`.
 11. Each of these prints `1`: `grep -c -- '--build-arg DOCKER_REGISTRY=' Makefile.docker`, `grep -c -- '--build-arg BUILD_GIT_VERSION=' Makefile.docker`, `grep -c -- '--build-arg BUILD_GIT_COMMIT=' Makefile.docker`, `grep -c -- '--build-arg BUILD_DATE=' Makefile.docker`, `grep -c -- '--build-arg SOURCE_DATE_EPOCH=' Makefile.docker`.
 12. `grep -c "TAG='\$(VERSION)'" Makefile.docker` — prints `1` (the repository's own tag variable).
 13. `grep -c 'BUILD_REPO_URL ?= https://github.com/$(IMAGE).git' Makefile.docker` — prints `1` (the clone URL derives from the repository's image variable).
-14. `grep -c 'SERVICE' Makefile.docker` — prints `0`; `grep -c 'BRANCH' Makefile.docker` — prints `0` (the reference's variable names did not survive the port).
+14. `! grep -q 'SERVICE' Makefile.docker` — exits 0; `! grep -q 'BRANCH' Makefile.docker` — exits 0 (the reference's variable names did not survive the port).
 15. `grep -c 'ifeq ($(BUILD_TARGET),local)' Makefile.docker` — prints `1` (only `build` is dispatched today; prompt 3 adds the other two).
-16. `grep -c 'mod=vendor' Makefile.docker` — prints `0` (the Dockerfile's module flag is prompt 4's business, not this file's).
+16. `! grep -q 'mod=vendor' Makefile.docker` — exits 0 (the Dockerfile's module flag is prompt 4's business, not this file's).
 17. `make -n build BUILD_TARGET=local` — prints the `docker buildx build` recipe, including `--no-cache`, `--provenance=false`, `--sbom=false`, the five `--build-arg` lines and `--output type=docker,rewrite-timestamp=true,unpack=false`. It does not print `hack/build-cluster.sh`.
-18. `make -n build BUILD_TARGET=sun REF=master | grep -c 'hack/build-cluster.sh'` — prints `1`; `make -n build BUILD_TARGET=sun REF=master | grep -c 'docker buildx build'` — prints `0`.
+18. `make -n build BUILD_TARGET=sun REF=master | grep -c 'hack/build-cluster.sh'` — prints `1`; `! make -n build BUILD_TARGET=sun REF=master | grep -q 'docker buildx build'` — exits 0.
 19. `make -n build BUILD_TARGET=sun | grep -c "REF=''"` — prints `1` (the empty `REF` is passed through; make adds no default and no check, so the script's own `REF is required` failure stays reachable).
-20. `make -n build BUILD_TARGET=sun REF=master | grep -c "TAG='\$(VERSION)'\|TAG=''"` — prints `1` (the tag variable is mapped onto the script's `TAG`).
+20. `make -n build BUILD_TARGET=sun REF=master | grep -c "TAG='"` — prints `1` (the tag variable is mapped onto the script's `TAG`; grepping the expanded prefix keeps the check independent of whether `VERSION` resolves).
 21. `make -n build BUILD_TARGET=sun REF=master | grep -c "IMAGE='docker.io/bborbe/agent-claude'"` — prints `1` (the cluster arm passes the full repository including the registry, which is what the Job renders `name=__IMAGE__:__TAG__` from).
 22. `make -n build BUILD_TARGET=sun REF=master | grep -c "PUSH='true'"` — prints `1` (the script validates `PUSH` as `true`/`false`; anything else aborts before the Job is created).
 23. `make -n upload BUILD_TARGET=sun | grep -c 'docker push'` — prints `1` and `make -n clean BUILD_TARGET=sun | grep -c 'docker rmi'` — prints `1` (neither target is guarded yet; prompt 3 changes that).

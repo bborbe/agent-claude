@@ -54,7 +54,7 @@ Make the image build portable: let the `go build` resolve modules from the modul
 </objective>
 
 <context>
-Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `autoRelease: false`, `validationPrompt: docs/dod.md`; the effective config resolves `validationCommand: make precommit`.
+Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `validationPrompt: docs/dod.md`; the effective config resolves `autoRelease=false`, `hideGit=true` and `validationCommand: make precommit` (the first two come from the daemon's `--set` flags, not the file).
 
 Read the spec at `specs/in-progress/006-build-target-remote-build.md` — Desired Behavior 6, Constraints, Non-goals, and Acceptance Criterion 9 — because you have no other memory of it.
 
@@ -136,9 +136,9 @@ Run each command from the repository root and confirm the stated result. `ROOTDI
 A note on reading the results: absence checks are written as `! grep -q …`, which prints nothing and exits 0 when the string is absent — that exit 0 is the expected result. `grep -c` is used only where the expected count is non-zero.
 
 1. `grep -c '^ARG DOCKER_REGISTRY=docker.io$' Dockerfile` — prints `1` (AC 9: the portable default).
-2. `grep -c 'docker.prod.nuke.benjamin-borbe.de' Dockerfile` — prints `0` (the machine-specific mirror host is gone).
-3. `grep -c 'mod=vendor' Dockerfile` — prints `0` (AC 9: no explicit vendor flag, and no comment quoting it).
-4. `grep -c -- '-mod=' Dockerfile` — prints `0` (no replacement flag either — `-mod=mod` would break the local arm).
+2. `! grep -q 'docker.prod.nuke.benjamin-borbe.de' Dockerfile` — exits 0 (the machine-specific mirror host is gone).
+3. `! grep -q 'mod=vendor' Dockerfile` — exits 0 (AC 9: no explicit vendor flag, and no comment quoting it).
+4. `! grep -q -- '-mod=' Dockerfile` — exits 0 (no replacement flag either — `-mod=mod` would break the local arm).
 5. `grep -c '^RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s" -a -installsuffix cgo -o /main$' Dockerfile` — prints `1` (the build line is exactly the old line minus the vendor flag).
 6. `grep -c '^FROM ${DOCKER_REGISTRY}/golang:1.27.3 AS build$' Dockerfile` — prints `1`; `grep -c '^FROM ${DOCKER_REGISTRY}/alpine:3.23 AS alpine$' Dockerfile` — prints `1`; `grep -c '^FROM alpine$' Dockerfile` — prints `1` (all three stages and their base images are unchanged).
 7. `grep -c '^FROM ' Dockerfile` — prints `3`; `grep -c '^RUN ' Dockerfile` — prints `10`; `grep -c '^ENV ' Dockerfile` — prints `7`; `grep -c '^COPY ' Dockerfile` — prints `9`; `grep -c '^WORKDIR ' Dockerfile` — prints `1`; `grep -c '^CMD ' Dockerfile` — prints `1`; `grep -c '^ENTRYPOINT ' Dockerfile` — prints `1`; `grep -c '^LABEL ' Dockerfile` — prints `1` (file shape unchanged — only line content changed).

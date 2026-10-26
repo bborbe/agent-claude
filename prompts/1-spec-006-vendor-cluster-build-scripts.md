@@ -54,7 +54,7 @@ Vendor the five cluster-build files from `bborbe/go-skeleton` at commit `18866d9
 </objective>
 
 <context>
-Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `autoRelease: false`, `validationPrompt: docs/dod.md`; the effective config resolves `validationCommand: make precommit`.
+Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `validationPrompt: docs/dod.md`; the effective config resolves `autoRelease=false`, `hideGit=true` and `validationCommand: make precommit` (the first two come from the daemon's `--set` flags, not the file).
 
 This prompt is the first of five for spec `006-build-target-remote-build`. Read the spec at `specs/in-progress/006-build-target-remote-build.md` — particularly Constraints, Failure Modes and Acceptance Criteria 1 and 2 — because you have no other memory of it. This prompt does not depend on the other four prompts of this spec; it stands alone.
 
@@ -94,7 +94,7 @@ Coding guides (in-container paths):
    ```
    `-f` is load-bearing: without it `curl` writes an HTML error body to `hack/<file>` with exit 0 and the copy is silently corrupt. The five names are exact — no extra file, no renamed file.
 
-2. **If any fetch fails, stop.** Report the failing URL verbatim and finish with a failed completion report. Do NOT hand-author, reconstruct, shorten, reformat, or "restore from memory" any of the five files: a locally written substitute fails the byte-identity diff that is this prompt's entire point, and it would look correct while diverging from the reference. The spec's recovery is an operator step (copy the five files from a local `go-skeleton` checkout at `18866d9d`, then re-run this prompt), not something this container can do.
+2. **If any fetch fails, stop.** Report the failing URL verbatim and finish with a failed completion report. Do NOT hand-author, reconstruct, shorten, reformat, or "restore from memory" any of the five files: a locally written substitute fails the byte-identity diff that is this prompt's entire point, and it would look correct while diverging from the reference. The spec's recovery is an operator step (copy the five files from a local `go-skeleton` checkout at `18866d9d` into `hack/`, then re-run this prompt with requirement 1's fetch skipped — re-running it unchanged re-fetches and fails the same way), not something this container can do.
 
 3. **Set the reference modes explicitly.** `curl -o` creates files `644`, so:
    ```bash
@@ -157,8 +157,8 @@ A note on reading the results: absence checks are written as `! grep -q …`, wh
 12. `! test -f hack/update-codegen.sh` — exits 0 (the out-of-scope script was not stubbed into existence).
 13. `! grep -qE 'ghs_[A-Za-z0-9]|github_pat_|BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY|"(password|auth)"[[:space:]]*:[[:space:]]*"[A-Za-z0-9+/=]{16,}"' hack/*` — exits 0 (no credential value in any vendored file; the template's `password` value is a `{{ "eqKWoq" | teamvaultPassword }}` expression, not a literal).
 14. `! grep -q 'hack/build-cluster.sh' Makefile.docker` — exits 0 (this prompt did not wire the dispatch; that is prompt 2).
-15. `grep -c 'docker build' Makefile.docker` — prints at least `1` and `grep -c 'hack/' Makefile.docker` — prints `0` (the existing build block is untouched).
-16. `head -1 CHANGELOG.md` — prints `# Changelog`; `grep -c '^## Unreleased' CHANGELOG.md` — prints `0` (prompt 5 owns the changelog entry; this prompt does not create one).
+15. `grep -c 'docker build' Makefile.docker` — prints at least `1` and `! grep -q 'hack/' Makefile.docker` — exits 0 (the existing build block is untouched).
+16. `head -1 CHANGELOG.md` — prints `# Changelog`; `! grep -q '^## Unreleased' CHANGELOG.md` — exits 0 (prompt 5 owns the changelog entry; this prompt does not create one).
 17. `ROOTDIR=/workspace make precommit` — exits 0. This is the repository's declared validation command and the exit code the completion report carries. If it fails for a reason unrelated to this change, report the failing target and its output verbatim rather than editing anything outside requirements 1–5.
 </verification>
 

@@ -54,7 +54,7 @@ Guard the `upload` and `clean` targets on `BUILD_TARGET` so that a build dispatc
 </objective>
 
 <context>
-Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `autoRelease: false`, `validationPrompt: docs/dod.md`; the effective config resolves `validationCommand: make precommit`.
+Read `docs/dod.md` first — it is this repository's declared `validationPrompt` and the Definition of Done you are graded against. Read `.dark-factory.yaml` — `workflow: direct`, `pr: false`, `autoMerge: false`, `validationPrompt: docs/dod.md`; the effective config resolves `autoRelease=false`, `hideGit=true` and `validationCommand: make precommit` (the first two come from the daemon's `--set` flags, not the file).
 
 Read the spec at `specs/in-progress/006-build-target-remote-build.md` — Desired Behavior 4, Constraints, Failure Modes, and Acceptance Criteria 8 — because you have no other memory of it.
 
@@ -147,15 +147,15 @@ A note on reading the results: absence checks are written as `! grep -q …`, wh
 1. `grep -c 'BUILD_TARGET ?= local' Makefile.docker` — prints `1` (the ship-order guard for prompt 2).
 2. `grep -c 'ifeq ($(BUILD_TARGET),local)' Makefile.docker` — prints `3` (AC 8: `build`, `upload` and `clean`, and nothing else).
 3. `make -n upload BUILD_TARGET=local | grep -c 'docker push docker.io/bborbe/agent-claude'` — prints `1` (the local push is unchanged; the pattern is the *expanded* command, because `make -n` prints the recipe after variable expansion, so grepping for `$(DOCKER_REGISTRY)` would never match).
-4. `make -n upload BUILD_TARGET=sun | grep -c 'docker push'` — prints `0`; `make -n upload BUILD_TARGET=sun | grep -c 'upload: skipped'` — prints `1` (the remote push is a visible no-op).
+4. `! make -n upload BUILD_TARGET=sun | grep -q 'docker push'` — exits 0; `make -n upload BUILD_TARGET=sun | grep -c 'upload: skipped'` — prints `1` (the remote push is a visible no-op).
 5. `make -n clean BUILD_TARGET=local | grep -c 'rm -rf vendor'` — prints `1`; `make -n clean BUILD_TARGET=local | grep -c 'docker builder prune --all -f'` — prints `1`; `make -n clean BUILD_TARGET=local | grep -c 'docker image prune -f'` — prints `1`; `make -n clean BUILD_TARGET=local | grep -c 'docker rmi'` — prints `1` (all four local commands survive).
-6. `make -n clean BUILD_TARGET=sun | grep -c 'docker rmi\|prune\|rm -rf vendor'` — prints `0`; `make -n clean BUILD_TARGET=sun | grep -c 'clean: skipped'` — prints `1` (the remote cleanup is a visible no-op).
+6. `! make -n clean BUILD_TARGET=sun | grep -q 'docker rmi\|prune\|rm -rf vendor'` — exits 0; `make -n clean BUILD_TARGET=sun | grep -c 'clean: skipped'` — prints `1` (the remote cleanup is a visible no-op).
 7. `grep -c '^buca: build upload clean apply$' Makefile.docker` — prints `1` (the combined target is untouched and still calls all three).
 8. `grep -c '^apply:$' Makefile.docker` — prints `1` (the deploy target is untouched).
 9. `grep -c 'docker buildx build' Makefile.docker` — prints `1`; `grep -c 'hack/build-cluster.sh' Makefile.docker` — prints `1`; `grep -c '^build: check-version-tag check-go-mod' Makefile.docker` — prints `1` (prompt 2's build target is intact).
-10. `grep -c 'SERVICE' Makefile.docker` — prints `0`; `grep -c 'BRANCH' Makefile.docker` — prints `0`; `grep -c 'date -u' Makefile.docker` — prints `0`.
-11. `grep -c -- '^[[:space:]]*--pull' Makefile.docker` — prints `0`; `grep -c -- '^[[:space:]]*--no-cache' Makefile.docker` — prints `1`.
-12. `grep -cE '^[[:space:]]*docker login' Makefile.docker` — prints `0` (no credential-handling *step* was introduced). Do not use a bare `docker login` substring: the pre-existing comment above the `buca` target already contains the words "requires `docker login`", and that comment is to be left alone.
+10. `! grep -q 'SERVICE' Makefile.docker` — exits 0; `! grep -q 'BRANCH' Makefile.docker` — exits 0; `! grep -q 'date -u' Makefile.docker` — exits 0.
+11. `! grep -q -- '^[[:space:]]*--pull' Makefile.docker` — exits 0; `grep -c -- '^[[:space:]]*--no-cache' Makefile.docker` — prints `1`.
+12. `! grep -qE '^[[:space:]]*docker login' Makefile.docker` — exits 0 (no credential-handling *step* was introduced). Do not use a bare `docker login` substring: the pre-existing comment above the `buca` target already contains the words "requires `docker login`", and that comment is to be left alone.
 13. `ROOTDIR=/workspace make precommit` — exits 0. This is the repository's declared validation command and the exit code the completion report carries. If it fails for a reason unrelated to this change, report the failing target and its output verbatim rather than editing anything outside requirements 1–6.
 </verification>
 
