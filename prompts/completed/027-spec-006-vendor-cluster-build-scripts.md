@@ -1,7 +1,13 @@
 ---
-status: draft
+status: completed
 spec: [006-build-target-remote-build]
+summary: Vendored the five pinned go-skeleton cluster-build files verbatim into hack/ with reference modes (755 scripts, 644 YAML/template); byte-identity, markers, bash -n and make precommit all pass.
+execution_id: agent-claude-build-target-exec-027-spec-006-vendor-cluster-build-scripts
+dark-factory-version: v0.198.7
 created: "2026-10-26T01:36:28Z"
+queued: "2026-10-26T02:00:06Z"
+started: "2026-10-26T02:00:07Z"
+completed: "2026-10-26T02:04:39Z"
 ---
 
 <!--

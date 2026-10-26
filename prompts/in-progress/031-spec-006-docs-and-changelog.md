@@ -1,7 +1,8 @@
 ---
-status: draft
+status: approved
 spec: [006-build-target-remote-build]
 created: "2026-10-26T01:36:28Z"
+queued: "2026-10-26T02:00:06Z"
 ---
 
 <!--
