@@ -68,8 +68,10 @@ machine that did not do the build.)
 
 Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which the build feeds
 from `git describe --tags` on either arm: `make build` on the invoking machine, and the
-cluster Job from the cloned tree. **This check applies to both arms**, so a `dev` result means
-the build did not reach the arm that produced this image, not that the check is inapplicable.
+cluster Job from the cloned tree. **This check applies to a release build on either arm**, so a
+`dev` result means the build did not reach the arm that produced this image, not that the check
+is inapplicable. ⚠️ On the cluster arm it holds only when `REF` is the tag itself — see the note
+under the cluster procedure.
 
 Finally, confirm the toolchain the workers need is present:
 
@@ -87,10 +89,15 @@ in the target cluster, the Job mounts the push secret and pushes
 `docker.io/bborbe/agent-claude` itself, so the registry credential never sits on the invoking
 machine.
 
-The two arms are equivalent in *where* they build, not in the bytes they emit. The Job passes
-only the commit epoch, so a cluster-built image carries the Dockerfile's `dev` / `none` /
-`unknown` version defaults while a local build stamps real values. That divergence is
-recorded, not closed — do not read a cluster arm's missing version label as a build failure.
+The two arms are equivalent in *where* they build, and — for a release build — in the version
+they stamp: both run the same `git describe --tags` derivation, and with `REF=<tag>` the
+cluster arm's `org.opencontainers.image.version` reads `vX.Y.Z` exactly as the local arm's
+does. ⚠️ **That equivalence is specific to a tag `REF`.** A `--depth=1` clone leaves the
+checked-out commit parentless, so `git describe` can only resolve a tag pointing *exactly at*
+HEAD; a branch or SHA `REF` falls through to `--always` and yields a bare short SHA, where a
+local full-history build would yield `vX.Y.Z-N-gSHA`. `BUILD_GIT_COMMIT` and `BUILD_DATE` are
+not forwarded either, so `.created` / `.revision` keep their defaults on this arm — no label is
+affected here, because this image stamps only `.version`.
 
 ### Prerequisites
 
@@ -120,15 +127,33 @@ For a scratch build:
 ALLOW_UNTAGGED_BUILD=1 VERSION=<scratch> REF=<branch> make build BUILD_TARGET=<cluster>
 ```
 
-⚠️ **This arm passes `BUILD_GIT_VERSION`, so the Verify label check applies to a
-cluster-built image exactly as it does to a local one.** The vendored `hack/build-job.yaml`
-derives the version from the cloned tree — `git describe --tags --always --dirty` written to
-`/meta/git-version` — and forwards it as a build-arg, so
-`org.opencontainers.image.version` reads `vX.Y.Z` rather than the Dockerfile's `dev` default.
-The derivation is from the tree actually built rather than from `__TAG__`, so the label cannot
-disagree with the commit it came from. ⚠️ **The fetch's `--tags` is load-bearing**: without it
-the shallow clone carries no tag ref, `git describe` falls through to `--always`, and the label
-becomes a short SHA — which fails the Verify check for a build that is otherwise correct.
+⚠️ **This arm passes `BUILD_GIT_VERSION`, so the Verify label check applies to a release build
+on it.** The vendored `hack/build-job.yaml` derives the version from the cloned tree —
+`git describe --tags --always --dirty` written to `/meta/git-version` — and forwards it as a
+build-arg, so with `REF=<tag>` `org.opencontainers.image.version` reads `vX.Y.Z` rather than the
+Dockerfile's `dev` default. The derivation is from the tree actually built rather than from
+`__TAG__`, so the label cannot disagree with the commit it came from. ⚠️ **The fetch's `--tags`
+is load-bearing**: without it the shallow clone carries no tag ref, `git describe` falls through
+to `--always`, and the label becomes a short SHA — which fails the Verify check for a build that
+is otherwise correct.
+
+⚠️ **`REF=<tag>` is the only case the label assertion covers.** The scratch invocation above uses
+`REF=<branch>`, and a `--depth=1` clone leaves the checked-out commit parentless, so `describe`
+can only resolve a tag pointing exactly at HEAD — a branch tip ahead of the last tag falls through
+to `--always` and the label is a bare short SHA, not `vX.Y.Z`. Do not read that as a build failure.
+
+To exercise both, build the same tag from a tag ref and from a branch ref and compare the labels:
+
+```bash
+make build BUILD_TARGET=<cluster> REF=vX.Y.Z VERSION=vX.Y.Z-probe-tag
+make build BUILD_TARGET=<cluster> REF=master  VERSION=vX.Y.Z-probe-branch
+crane config docker.io/bborbe/agent-claude:vX.Y.Z-probe-tag    | jq -r '.config.Labels["org.opencontainers.image.version"]'
+crane config docker.io/bborbe/agent-claude:vX.Y.Z-probe-branch | jq -r '.config.Labels["org.opencontainers.image.version"]'
+```
+
+Expect `vX.Y.Z` from the first and a short SHA from the second. Delete both scratch tags with
+`crane delete` afterwards. ⚠️ **A Job named `build-<tag>` that already exists makes the script
+refuse** — delete it first and re-run.
 
 `BUILD_GIT_COMMIT` and `BUILD_DATE` are still not forwarded. This image stamps only
 `org.opencontainers.image.version`, so no label is affected here; a repo whose Dockerfile
