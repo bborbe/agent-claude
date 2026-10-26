@@ -100,8 +100,8 @@ type application struct {
 	// ⚠️ These are dedicated fields rather than CLAUDE_ENV entries because CLAUDE_ENV
 	// is a comma-separated bag and NO_PROXY is itself a comma-separated list — packing
 	// it there would truncate it to its first entry and silently drop the rest.
-	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"        display:"length"`
-	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child"       display:"length"`
+	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"  display:"length"`
+	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child" display:"length"`
 	NoProxy    string `required:"false" arg:"no-proxy"    env:"NO_PROXY"    usage:"Proxy bypass list forwarded to the Claude child" display:"length"`
 
 	// Attention-store credentials, forwarded to the Claude child rather than kept
