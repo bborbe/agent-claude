@@ -27,7 +27,10 @@ mirrored image from the quant registry, and `make buca` is banned for this repo 
 Published tags exist for the cluster, but a local loop wants the image built from the tree you
 are actually iterating on. No vendored tree is needed: the Dockerfile's `go build` resolves
 modules from the module cache when `vendor/` is absent and uses `vendor/` when it is present,
-so a fresh clone builds as-is.
+so a fresh clone builds as-is. A fresh clone's cache is empty, so that first build downloads
+the modules from `proxy.golang.org` and verifies them against `sum.golang.org` — the build
+needs network access to both. The same is true of the cluster arm: the build pod resolves
+modules over the network, so the cluster needs egress to those two hosts.
 
 Build natively for the host architecture. On Apple Silicon this is the fast path; the
 `linux/amd64` build the Makefile produces is emulated and only needed for cluster parity:
@@ -48,8 +51,8 @@ Two build targets exist. `make build BUILD_TARGET=local` is the default: it buil
 same binary and the same image config — which needs a `docker`-driver buildx builder. The
 image ID itself will differ: the image ships a warm Go build cache whose file contents embed
 build timestamps, and the exporter's timestamp rewrite normalises the layer tar, not those
-contents. `make build
-BUILD_TARGET=<cluster> REF=<branch or tag>` builds as a Job in that cluster instead; see
+contents. `make build BUILD_TARGET=<cluster> REF=<branch or tag>` builds as a Job in that
+cluster instead; see
 [`publish-image.md`](publish-image.md). A cluster build leaves no image on the invoking
 machine, so `upload` and `clean` do nothing on that arm.
 

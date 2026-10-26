@@ -9,7 +9,14 @@ BUILD_TARGET ?= local
 # timeout and Dockerfile and requires the push secret; the clone URL, tag and image
 # come from this repository. They are declared here so an operator can override one
 # without editing the script.
-BUILD_NAMESPACE ?= build
+#
+# ⚠️ The NAMESPACE is deliberately NOT one of them, and that is a correctness fix
+# rather than an omission. The vendored Job manifest hardcodes `namespace: build`,
+# while build-cluster.sh polls whatever namespace it is handed — so an override
+# creates the Job in `build` and then polls elsewhere until the 3600 s deadline
+# expires, which reads as a hung build rather than as the mistake it is. Until the
+# manifest is templated upstream in bborbe/go-skeleton, the namespace is fixed at
+# `build` and the script's own default is used. See the spec's Constraints.
 BUILD_TIMEOUT ?= 3600
 BUILD_REPO_URL ?= https://github.com/$(IMAGE).git
 BUILD_DOCKERFILE ?= Dockerfile
@@ -24,9 +31,15 @@ REF ?=
 SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct)
 BUILD_DATE ?= $(shell git log -1 --format=%cI)
 
+# ⚠️ The prerequisites are LOCAL-ARM ONLY, and that is load-bearing rather than
+# tidiness. `check-version-tag` asserts the tree sits at the tag it claims to build,
+# and `check-go-mod` runs `go mod vendor` — both describe the local HEAD. The cluster
+# arm builds REF, which need not be HEAD and need not exist locally at all, so running
+# them there would validate a different commit than the one built, and would demand a
+# local Go toolchain and network for a build that happens in the cluster.
 .PHONY: build
-build: check-version-tag check-go-mod
 ifeq ($(BUILD_TARGET),local)
+build: check-version-tag check-go-mod
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: no VERSION set and no git tag found — set VERSION=vX.Y.Z or create a tag" >&2; exit 1; fi
 	docker buildx build \
 	--platform=linux/amd64 \
@@ -42,8 +55,8 @@ ifeq ($(BUILD_TARGET),local)
 	-f Dockerfile . \
 	--output type=docker,rewrite-timestamp=true,unpack=false
 else
+build:
 	BUILD_TARGET='$(BUILD_TARGET)' \
-	NAMESPACE='$(BUILD_NAMESPACE)' \
 	TIMEOUT='$(BUILD_TIMEOUT)' \
 	REPO_URL='$(BUILD_REPO_URL)' \
 	REF='$(REF)' \

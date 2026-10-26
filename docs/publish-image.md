@@ -14,7 +14,11 @@ stuck and every pod pinning that tag in `ImagePullBackOff`.
 
 ## Prerequisites
 
-- Docker running.
+- Docker running, with the `buildx` plugin and a `docker`-driver builder selected
+  (`docker buildx ls` marks it with `*`). The local arm builds through `docker buildx build`,
+  so a Docker install without buildx fails with `docker: 'buildx' is not a docker command`,
+  and a container-driver builder writes to a separate cache, which breaks the two-build
+  equality described under the local procedure.
 - `docker login` as the `bborbe` Docker Hub account. The credential is the operator's own —
   never store it in the repo, in a GitHub secret, or in a shell transcript.
 
@@ -63,7 +67,9 @@ docker inspect --format '{{index .Config.Labels "org.opencontainers.image.versio
 machine that did not do the build.)
 
 Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which `make build`
-feeds from `git describe --tags`.
+feeds from `git describe --tags`. **This check is for a locally built image only**: a
+cluster-built image carries the Dockerfile's `dev` default, because that arm passes only
+`SOURCE_DATE_EPOCH` (see the note under the cluster procedure below).
 
 Finally, confirm the toolchain the workers need is present:
 
@@ -114,11 +120,15 @@ For a scratch build:
 ALLOW_UNTAGGED_BUILD=1 VERSION=<scratch> REF=<branch> make build BUILD_TARGET=<cluster>
 ```
 
-For a release build, the ref and the tag are the same:
-
-```bash
-VERSION=vX.Y.Z REF=vX.Y.Z make build BUILD_TARGET=<cluster>
-```
+⚠️ **The cluster arm is not a release path yet, and the label check above does not apply
+to it.** The vendored `hack/build-job.yaml` passes only `SOURCE_DATE_EPOCH`, so a
+cluster-built image carries the Dockerfile's defaults:
+`org.opencontainers.image.version` is `dev`, not `vX.Y.Z`, and `BUILD_GIT_COMMIT` /
+`BUILD_DATE` are `none` / `unknown`. Running the Verify section's label assertion against
+a cluster-built image therefore fails by design rather than because the build is broken —
+which is exactly the kind of false red that costs an afternoon. Passing the three args
+through to the Job is the fix, and it belongs upstream in `bborbe/go-skeleton` with the
+rest of the manifest, not in a repo-local edit of a file the spec pins as a verbatim copy.
 
 `REF=` is required on this arm and has no default. `sun`, `nukedev` and `nukeprod` are
 aliases; any other value is a raw `kubectl` context name.
