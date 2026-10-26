@@ -1,20 +1,59 @@
 DIRS += $(shell find */* -maxdepth 0 -name Makefile -exec dirname "{}" \;)
 
+# Which machine builds the image. `local` builds here with the docker-driver
+# builder; any other value is a cluster alias (sun, nukedev, nukeprod) or a raw
+# kubectl context name, and the build runs as a Job there.
+BUILD_TARGET ?= local
+
+# Cluster-build inputs. The vendored cluster script defaults the namespace,
+# timeout and Dockerfile and requires the push secret; the clone URL, tag and image
+# come from this repository. They are declared here so an operator can override one
+# without editing the script.
+BUILD_NAMESPACE ?= build
+BUILD_TIMEOUT ?= 3600
+BUILD_REPO_URL ?= https://github.com/$(IMAGE).git
+BUILD_DOCKERFILE ?= Dockerfile
+BUILD_PUSH_SECRET ?= buildkit-push
+
+# The branch or tag the cluster clones. Empty on purpose: the cluster arm must be
+# told which commit to build, and the vendored script refuses to run without it.
+REF ?=
+
+# The build clock comes from the commit, not the wall clock, so two builds of one
+# commit agree. BuildKit reads SOURCE_DATE_EPOCH when it rewrites file timestamps.
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct)
+BUILD_DATE ?= $(shell git log -1 --format=%cI)
+
 .PHONY: build
 build: check-version-tag check-go-mod
+ifeq ($(BUILD_TARGET),local)
 	@if [ -z "$(VERSION)" ]; then echo "ERROR: no VERSION set and no git tag found — set VERSION=vX.Y.Z or create a tag" >&2; exit 1; fi
-	DOCKER_BUILDKIT=1 \
-	docker build \
-	--pull \
-	--no-cache \
-	--rm=true \
+	docker buildx build \
 	--platform=linux/amd64 \
+	--no-cache \
+	--provenance=false \
+	--sbom=false \
 	--build-arg DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
 	--build-arg BUILD_GIT_VERSION=$$(git describe --tags --always --dirty) \
 	--build-arg BUILD_GIT_COMMIT=$$(git rev-parse --short HEAD) \
-	--build-arg BUILD_DATE=$$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+	--build-arg BUILD_DATE=$(BUILD_DATE) \
+	--build-arg SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
 	-t $(DOCKER_REGISTRY)/$(IMAGE):$(VERSION) \
-	-f Dockerfile .
+	-f Dockerfile . \
+	--output type=docker,rewrite-timestamp=true,unpack=false
+else
+	BUILD_TARGET='$(BUILD_TARGET)' \
+	NAMESPACE='$(BUILD_NAMESPACE)' \
+	TIMEOUT='$(BUILD_TIMEOUT)' \
+	REPO_URL='$(BUILD_REPO_URL)' \
+	REF='$(REF)' \
+	TAG='$(VERSION)' \
+	DOCKERFILE='$(BUILD_DOCKERFILE)' \
+	IMAGE='$(DOCKER_REGISTRY)/$(IMAGE)' \
+	PUSH='true' \
+	PUSH_SECRET='$(BUILD_PUSH_SECRET)' \
+	hack/build-cluster.sh
+endif
 
 .PHONY: check-version-tag
 check-version-tag:
@@ -43,14 +82,22 @@ check-go-mod:
 
 .PHONY: upload
 upload:
+ifeq ($(BUILD_TARGET),local)
 	docker push $(DOCKER_REGISTRY)/$(IMAGE):$(VERSION)
+else
+	@echo "upload: skipped — BUILD_TARGET=$(BUILD_TARGET); the cluster Job already pushed $(DOCKER_REGISTRY)/$(IMAGE):$(VERSION)"
+endif
 
 .PHONY: clean
 clean:
+ifeq ($(BUILD_TARGET),local)
 	docker rmi $(DOCKER_REGISTRY)/$(IMAGE):$(VERSION) || true
 	docker image prune -f || true
 	docker builder prune --all -f || true
 	rm -rf vendor
+else
+	@echo "clean: skipped — BUILD_TARGET=$(BUILD_TARGET); no local image to remove"
+endif
 
 .PHONY: apply
 apply:

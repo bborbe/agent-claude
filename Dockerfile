@@ -1,11 +1,14 @@
-ARG DOCKER_REGISTRY=docker.prod.nuke.benjamin-borbe.de:443
+ARG DOCKER_REGISTRY=docker.io
 FROM ${DOCKER_REGISTRY}/golang:1.27.3 AS build
 ARG BUILD_GIT_VERSION=dev
 ARG BUILD_GIT_COMMIT=none
 ARG BUILD_DATE=unknown
 COPY . /workspace
 WORKDIR /workspace
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -mod=vendor -ldflags "-s" -a -installsuffix cgo -o /main
+# With no explicit module flag, Go uses `vendor/` when it is present and the module
+# cache when it is not — which is the state of every cluster clone. `make check-go-mod`
+# still vendors the local arm's tree, so a local build keeps using it.
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s" -a -installsuffix cgo -o /main
 CMD ["/bin/bash"]
 
 FROM ${DOCKER_REGISTRY}/alpine:3.23 AS alpine
