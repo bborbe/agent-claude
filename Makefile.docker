@@ -56,7 +56,23 @@ build: check-version-tag check-go-mod
 	--output type=docker,rewrite-timestamp=true,unpack=false
 else
 build:
+	@if [ "$(origin VERSION)" = "file" ] || [ "$(origin VERSION)" = "undefined" ]; then \
+		echo "ERROR: VERSION is not set, and the Makefile's default is the latest release tag ($(VERSION))." >&2; \
+		echo "  The cluster arm pushes with PUSH=true, so building REF=$(REF) would overwrite the" >&2; \
+		echo "  published image for that release tag with an image built from a different commit." >&2; \
+		echo "  Set it explicitly: make build BUILD_TARGET=$(BUILD_TARGET) REF=$(REF) VERSION=<scratch>" >&2; \
+		exit 1; \
+	fi
+	@case "$(VERSION)" in \
+		v[0-9]*.[0-9]*.[0-9]*) \
+			if [ "$(REF)" != "$(VERSION)" ]; then \
+				echo "ERROR: refusing to push release tag $(VERSION) from REF=$(REF)." >&2; \
+				echo "  A release image must be built from its own tag: REF=$(VERSION)." >&2; \
+				exit 1; \
+			fi ;; \
+	esac
 	BUILD_TARGET='$(BUILD_TARGET)' \
+	NAMESPACE='build' \
 	TIMEOUT='$(BUILD_TIMEOUT)' \
 	REPO_URL='$(BUILD_REPO_URL)' \
 	REF='$(REF)' \
