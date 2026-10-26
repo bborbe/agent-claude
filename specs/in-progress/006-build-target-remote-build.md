@@ -1,5 +1,9 @@
 ---
-status: draft
+status: prompted
+approved: "2026-10-26T01:34:55Z"
+generating: "2026-10-26T01:34:55Z"
+prompted: "2026-10-26T01:47:51Z"
+branch: dark-factory/build-target-remote-build
 ---
 
 ## Summary
