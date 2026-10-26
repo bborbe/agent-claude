@@ -66,10 +66,12 @@ docker inspect --format '{{index .Config.Labels "org.opencontainers.image.versio
 (`docker inspect` reads the local daemon, so the pull is what makes this check work from a
 machine that did not do the build.)
 
-Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which `make build`
-feeds from `git describe --tags`. **This check is for a locally built image only**: a
-cluster-built image carries the Dockerfile's `dev` default, because that arm passes only
-`SOURCE_DATE_EPOCH` (see the note under the cluster procedure below).
+Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which the build feeds
+from `git describe --tags` on either arm: `make build` on the invoking machine, and the
+cluster Job from the cloned tree. **This check applies to a release build on either arm**, so a
+`dev` result means the build did not reach the arm that produced this image, not that the check
+is inapplicable. ⚠️ On the cluster arm it holds only when `REF` is the tag itself — see the note
+under the cluster procedure.
 
 Finally, confirm the toolchain the workers need is present:
 
@@ -87,10 +89,15 @@ in the target cluster, the Job mounts the push secret and pushes
 `docker.io/bborbe/agent-claude` itself, so the registry credential never sits on the invoking
 machine.
 
-The two arms are equivalent in *where* they build, not in the bytes they emit. The Job passes
-only the commit epoch, so a cluster-built image carries the Dockerfile's `dev` / `none` /
-`unknown` version defaults while a local build stamps real values. That divergence is
-recorded, not closed — do not read a cluster arm's missing version label as a build failure.
+The two arms are equivalent in *where* they build, and — for a release build — in the version
+they stamp: both run the same `git describe --tags` derivation, and with `REF=<tag>` the
+cluster arm's `org.opencontainers.image.version` reads `vX.Y.Z` exactly as the local arm's
+does. ⚠️ **That equivalence is specific to a tag `REF`.** A `--depth=1` clone leaves the
+checked-out commit parentless, so `git describe` can only resolve a tag pointing *exactly at*
+HEAD; a branch or SHA `REF` falls through to `--always` and yields a bare short SHA, where a
+local full-history build would yield `vX.Y.Z-N-gSHA`. `BUILD_GIT_COMMIT` and `BUILD_DATE` are
+not forwarded either, so `.created` / `.revision` keep their defaults on this arm — no label is
+affected here, because this image stamps only `.version`.
 
 ### Prerequisites
 
@@ -120,15 +127,48 @@ For a scratch build:
 ALLOW_UNTAGGED_BUILD=1 VERSION=<scratch> REF=<branch> make build BUILD_TARGET=<cluster>
 ```
 
-⚠️ **The cluster arm is not a release path yet, and the label check above does not apply
-to it.** The vendored `hack/build-job.yaml` passes only `SOURCE_DATE_EPOCH`, so a
-cluster-built image carries the Dockerfile's defaults:
-`org.opencontainers.image.version` is `dev`, not `vX.Y.Z`, and `BUILD_GIT_COMMIT` /
-`BUILD_DATE` are `none` / `unknown`. Running the Verify section's label assertion against
-a cluster-built image therefore fails by design rather than because the build is broken —
-which is exactly the kind of false red that costs an afternoon. Passing the three args
-through to the Job is the fix, and it belongs upstream in `bborbe/go-skeleton` with the
-rest of the manifest, not in a repo-local edit of a file the spec pins as a verbatim copy.
+⚠️ **This arm passes `BUILD_GIT_VERSION`, so the Verify label check applies to a release build
+on it.** The vendored `hack/build-job.yaml` derives the version from the cloned tree —
+`git describe --tags --always --dirty` written to `/meta/git-version` — and forwards it as a
+build-arg, so with `REF=<tag>` `org.opencontainers.image.version` reads `vX.Y.Z` rather than the
+Dockerfile's `dev` default. The derivation is from the tree actually built rather than from
+`__TAG__`, so the label cannot disagree with the commit it came from. ⚠️ **The fetch's `--tags`
+is load-bearing**: without it the shallow clone carries no tag ref, `git describe` falls through
+to `--always`, and the label becomes a short SHA — which fails the Verify check for a build that
+is otherwise correct.
+
+⚠️ **`REF=<tag>` is the only case the label assertion covers.** The scratch invocation above uses
+`REF=<branch>`, and a `--depth=1` clone leaves the checked-out commit parentless, so `describe`
+can only resolve a tag pointing exactly at HEAD — a branch tip ahead of the last tag falls through
+to `--always` and the label is a bare short SHA, not `vX.Y.Z`. Do not read that as a build failure.
+
+To exercise both, build the same tag from a tag ref and from a branch ref and compare the labels:
+
+```bash
+make build BUILD_TARGET=<cluster> REF=vX.Y.Z VERSION=probe-tag
+make build BUILD_TARGET=<cluster> REF=master  VERSION=probe-branch
+crane config docker.io/bborbe/agent-claude:probe-tag    | jq -r '.config.Labels["org.opencontainers.image.version"]'
+crane config docker.io/bborbe/agent-claude:probe-branch | jq -r '.config.Labels["org.opencontainers.image.version"]'
+```
+
+Expect `vX.Y.Z` from the first and a short SHA from the second. ⚠️ **`VERSION` must not be
+release-shaped** — the `VERSION`/`REF` guard in the `build` target (`Makefile.docker:66-73`)
+matches `v[0-9]*.[0-9]*.[0-9]*` and refuses any `vX.Y.Z` VERSION whose `REF` differs, so a
+`VERSION=vX.Y.Z-probe-tag` would exit 1 with *"refusing to push release tag"* and build nothing.
+A bare scratch name keeps the guard quiet while `REF=vX.Y.Z` still stamps `vX.Y.Z`. (This is
+**not** `check-version-tag`, which runs `git describe --tags --exact-match HEAD` and is a
+local-arm prerequisite this arm replaces.)
+
+Delete both scratch tags with `crane delete` afterwards. ⚠️ **A Job named `build-<tag>` that
+already exists makes the script refuse** — delete it first and re-run.
+
+`BUILD_GIT_COMMIT` and `BUILD_DATE` are still not forwarded. This image stamps only
+`org.opencontainers.image.version`, so no label is affected here; a repo whose Dockerfile
+stamps `.created` / `.revision` would read `unknown` / `none` on the cluster arm.
+
+Keep this file's copy of the manifest in step with `bborbe/go-skeleton`, which owns it
+upstream — the fix belongs there first, not in a repo-local edit of a file pinned as a
+verbatim copy.
 
 `REF=` is required on this arm and has no default. `sun`, `nukedev` and `nukeprod` are
 aliases; any other value is a raw `kubectl` context name.
