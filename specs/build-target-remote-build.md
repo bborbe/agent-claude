@@ -4,11 +4,11 @@ status: draft
 
 ## Summary
 
-- `make build` gains a `BUILD_TARGET` switch: `local` (the default) keeps building on the invoking machine, any other value builds the same commit inside a cluster.
-- The cluster arm runs a `buildctl-daemonless.sh` Job that mounts the docker.io push credential inside the pod, so the credential never sits on the invoking machine.
-- The local arm moves from plain `docker build` to `docker buildx build` with a timestamp-rewriting exporter, so two builds of one commit produce the same image ID.
-- `upload` and `clean` become no-ops on a remote target, because the Job already pushed and no local image exists.
-- The Dockerfile stops requiring a vendored tree and stops defaulting its base-image registry to a machine-specific host.
+- Building the image gains a target switch: by default it still happens on the invoking machine, and any other value builds it inside a named cluster.
+- The cluster path runs the build as a Kubernetes Job that holds the registry credential inside the pod, so the credential never sits on the invoking machine.
+- The local path becomes reproducible: two builds of one commit now produce the same image ID, which plain `docker build` cannot do.
+- The push and cleanup steps become no-ops on a remote target, because the Job already pushed and no local image exists.
+- The image stops requiring a vendored tree, and stops defaulting its base-image registry to a machine-specific host.
 
 ## Problem
 
@@ -16,55 +16,66 @@ status: draft
 
 ## Goal
 
-`make build BUILD_TARGET=local` and `make build BUILD_TARGET=<cluster>` both produce an image from the same commit, and the local path keeps working exactly as it does today. On the cluster arm the build runs as a Job in the target cluster, pushes `docker.io/bborbe/agent-claude` under the account the pod holds, and leaves no image on the invoking machine.
+`make build BUILD_TARGET=local` and `make build BUILD_TARGET=<cluster>` both produce an image from the same ref — the same commit when `REF` names `HEAD` — and the local path keeps working exactly as it does today. On the cluster arm the build runs as a Job in the target cluster, pushes `docker.io/bborbe/agent-claude` under the account the pod holds, and leaves no image on the invoking machine.
 
 Cross-arm digest equality is **not** a goal. The reference Job passes only the commit epoch as a build arg, so a cluster-built image carries the Dockerfile's `dev` / `none` / `unknown` version defaults while the local arm stamps real values; the two arms are equivalent in where they build, not in the bytes they emit. That divergence is recorded as a gap, not closed here.
 
 ## Non-goals
 
 - **Not a change to what the image contains.** No new package, no version bump, no Dockerfile stage change beyond the module-resolution flag and the base-registry default.
-- **Not a deployment change.** `apply` stays a no-op, and the cluster still pulls the mirrored quant-registry image rather than docker.io.
+- **Not a deployment change.** `apply` deploys nothing, and the cluster still pulls the mirrored quant-registry image rather than docker.io.
 - **Not a change to `bborbe/go-skeleton`.** The reference implementation is copied, not forked, and `go-skeleton` is not edited.
 - **Not a release.** Verification runs on a scratch `VERSION`; the release is cut by the maintainer after merge.
 - **Not a persistent build cache.** Every remote build pays the cold-cache cost; that is the reference design and is not changed here.
 - **Not the version-label gap.** Making a cluster build stamp `BUILD_GIT_VERSION` / `BUILD_GIT_COMMIT` / `BUILD_DATE` requires the reference `hack/build-job.yaml` to pass three more build args. Editing it would fork the reference, so the gap is recorded for the fleet task instead.
 - **Not base-image pinning.** The final stage's unqualified `FROM alpine` is a pre-existing reproducibility defect. It is recorded, not fixed here.
+- **Not `make generatek8s`.** It invokes `hack/update-codegen.sh`, which does not exist and is not among the five files this change vendors. That breakage predates this change and stays.
 
 ## Acceptance Criteria
 
-- [ ] The five cluster-build scripts exist at their reference paths, with their reference modes, and carry the reference's behaviour — evidence: `ls hack/ | wc -l` returns 5; `stat -c '%a %n' hack/build-cluster-bootstrap.sh hack/build-cluster.sh hack/cluster-alias.sh` prints `755` for each and `stat -c '%a %n' hack/build-job.yaml hack/dockerconfig.json.tpl` prints `644` for each; `grep -c 'buildctl-daemonless.sh build' hack/build-job.yaml` returns 1; `grep -c 'safe.directory' hack/build-job.yaml` returns 1; `grep -c 'delete job' hack/build-cluster.sh` returns 1; `grep -c 'teamvault-cli' hack/build-cluster-bootstrap.sh` returns ≥ 1.
-- [ ] Each shell script parses — evidence: `bash -n hack/build-cluster.sh && bash -n hack/build-cluster-bootstrap.sh && bash -n hack/cluster-alias.sh` exits 0.
+- [ ] The five cluster-build scripts are byte-identical copies of the pinned reference, and no other file sits under `hack/` — evidence: `ls hack/ | wc -l` returns 5, and this loop exits 0:
+  ```
+  for f in build-cluster.sh build-cluster-bootstrap.sh build-job.yaml cluster-alias.sh dockerconfig.json.tpl; do
+    curl -sSfL "https://raw.githubusercontent.com/bborbe/go-skeleton/18866d9d6b0d6159829f7a9e825232608067fee7/hack/$f" | diff - "hack/$f" || exit 1
+  done
+  ```
+  A stub file, or any local edit to a vendored script, fails this diff.
+- [ ] The three shell scripts carry their reference mode — evidence: `stat -c '%a %n' hack/build-cluster-bootstrap.sh hack/build-cluster.sh hack/cluster-alias.sh` prints `755` for each, and `stat -c '%a %n' hack/build-job.yaml hack/dockerconfig.json.tpl` prints `644` for each.
 - [ ] `build` dispatches on `BUILD_TARGET` and keeps its prerequisites — evidence: `grep -c 'BUILD_TARGET ?= local' Makefile.docker` returns 1, `grep -c 'hack/build-cluster.sh' Makefile.docker` returns 1, `grep -c 'docker buildx build' Makefile.docker` returns 1, and `grep -c '^build: check-version-tag check-go-mod' Makefile.docker` returns 1.
-- [ ] The local arm uses the reproducible exporter recipe and drops `--pull` — evidence: `grep -c 'rewrite-timestamp=true,unpack=false' Makefile.docker` returns 1, `grep -c -- '--provenance=false' Makefile.docker` returns 1, `grep -c -- '--sbom=false' Makefile.docker` returns 1, `grep -c -- '^[[:space:]]*--no-cache' Makefile.docker` returns 1, and `grep -c -- '^[[:space:]]*--pull' Makefile.docker` returns 0 — the last two anchored to flag lines so a comment that names `--pull` cannot satisfy or break them.
+- [ ] The local arm uses the reproducible exporter recipe and drops `--pull` — evidence: `grep -c 'rewrite-timestamp=true,unpack=false' Makefile.docker` returns 1, `grep -c -- '--provenance=false' Makefile.docker` returns 1, `grep -c -- '--sbom=false' Makefile.docker` returns 1, `grep -c -- '^[[:space:]]*--no-cache' Makefile.docker` returns 1, and `grep -c -- '^[[:space:]]*--pull' Makefile.docker` returns 0 — the last two anchored to flag lines so a comment that names `--pull` neither satisfies nor breaks them.
 - [ ] The build clock comes from the commit, not the wall clock — evidence: `grep -c 'date -u' Makefile.docker` returns 0, `grep -c 'SOURCE_DATE_EPOCH ?=' Makefile.docker` returns 1, and `grep -c 'BUILD_DATE ?=' Makefile.docker` returns 1.
 - [ ] All five build args are passed on the local arm — evidence: `grep -c -- '--build-arg DOCKER_REGISTRY=' Makefile.docker`, `grep -c -- '--build-arg BUILD_GIT_VERSION=' Makefile.docker`, `grep -c -- '--build-arg BUILD_GIT_COMMIT=' Makefile.docker`, `grep -c -- '--build-arg BUILD_DATE=' Makefile.docker` and `grep -c -- '--build-arg SOURCE_DATE_EPOCH=' Makefile.docker` each return 1.
 - [ ] The repo's own variable names are preserved, not the reference's — evidence: `grep -c "TAG='\$(VERSION)'" Makefile.docker` returns 1, `grep -c 'BUILD_REPO_URL ?= https://github.com/\$(IMAGE).git' Makefile.docker` returns 1, and `grep -c 'SERVICE' Makefile.docker` and `grep -c 'BRANCH' Makefile.docker` each return 0.
 - [ ] `upload` and `clean` are guarded for a remote target — evidence: `grep -c 'ifeq (\$(BUILD_TARGET),local)' Makefile.docker` returns 3, one for each of `build`, `upload` and `clean`.
 - [ ] The Dockerfile needs no vendored tree and no machine-specific base registry — evidence: `grep -c 'mod=vendor' Dockerfile` returns 0 and `grep -c '^ARG DOCKER_REGISTRY=docker.io$' Dockerfile` returns 1.
-- [ ] The change is documented and recorded — evidence: `grep -c 'BUILD_TARGET' docs/publish-image.md` returns ≥ 1, `grep -c 'mod=vendor' docs/local-docker-run.md` returns 0, and `grep -c '^## Unreleased' CHANGELOG.md` returns 1 with `awk '/^## Unreleased/{f=1} f && /BUILD_TARGET/{print; exit}' CHANGELOG.md` printing a line.
+- [ ] The two docs that describe the build are brought up to date — evidence: `grep -c 'docker.prod.nuke.benjamin-borbe.de' docs/local-docker-run.md` returns 0, `grep -c 'go mod vendor' docs/local-docker-run.md` returns 0, and in `docs/publish-image.md` both `grep -c 'BUILD_TARGET'` and `grep -c 'REF='` return ≥ 1 and `grep -c 'build-cluster-bootstrap.sh'` returns ≥ 1.
+- [ ] The change is recorded — evidence: `grep -c '^## Unreleased' CHANGELOG.md` returns 1 and `awk '/^## Unreleased/{f=1} f && /BUILD_TARGET/{print; exit}' CHANGELOG.md` prints a line.
 - [ ] `make precommit` exits 0 — evidence: exit code.
 
 ## Verification
 
 ### Container-executable (runs inside the YOLO container at prompt time)
 
-The container has no Docker daemon and its `.git` is masked, so nothing here runs a build or reads git.
+The container has no Docker daemon and its `.git` is masked, so nothing here runs a build or reads git. It carries `go`, `make`, `bash`, `trivy`, `jq`, `python3`, `curl`, `stat`, `grep`, `awk` and `diff`; `column` is absent, but only the `vulncheck` failure path uses it.
 
-- `make precommit` — format, generate, python-check, python-test, shell-test, test, check, addlicense all clean. The container carries `go`, `make`, `trivy`, `jq` and `python3`; `column` is absent, but only the `vulncheck` failure path uses it.
-- `bash -n hack/build-cluster.sh && bash -n hack/build-cluster-bootstrap.sh && bash -n hack/cluster-alias.sh` — the scripts parse
+- `make precommit` — `ensure`, `format`, `generate`, `python-check`, `python-test`, `shell-test`, `test`, `check` and `addlicense` all clean
+- `bash -n` on the three vendored shell scripts — they parse
 - `stat -c '%a %n' hack/*` — the five files at their reference modes
-- the `grep` assertions over `hack/*`, `Makefile.docker`, `Dockerfile`, `docs/` and `CHANGELOG.md` named in the ACs above
+- the `curl | diff` loop in AC 1 — byte-identity with the pinned reference
+- the `grep` assertions over `Makefile.docker`, `Dockerfile`, `docs/` and `CHANGELOG.md` named in the ACs above
 
-### Operator-executable (runs on the host after PR merge, spec verification ladder)
+Note that CI never builds the image — `.github/workflows/ci.yml` runs only `make precommit` — so the greps are the whole automated evidence, and the operator rung below is the only place the image is actually built.
 
-`make buca` is **banned** by this repo's own docs (`docs/publish-image.md:36`, `docs/local-docker-run.md:12`). Its sanctioned equivalent here is `make build upload clean`: `apply` is a no-op either way, so the chain does exactly what `buca` would.
+### Operator-executable (runs on the host, before the PR)
 
-- `for f in build-cluster.sh build-cluster-bootstrap.sh build-job.yaml cluster-alias.sh dockerconfig.json.tpl; do diff <(git show HEAD:hack/$f) <(git -C ~/Documents/workspaces/go-skeleton show 18866d9d6b0d6159829f7a9e825232608067fee7:hack/$f) || echo "DIFF $f"; done` — prints nothing: byte-identical copies of the reference, not a fork
+Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconfig for the target cluster, `crane`, `teamvault-cli` with a login for the account holding the registry key, and `docker login` as `bborbe` for the local arm's push.
+
+- `for f in build-cluster.sh build-cluster-bootstrap.sh build-job.yaml cluster-alias.sh dockerconfig.json.tpl; do diff <(git show HEAD:hack/$f) <(git -C ~/Documents/workspaces/go-skeleton show 18866d9d6b0d6159829f7a9e825232608067fee7:hack/$f) || echo "DIFF $f"; done` — prints nothing
 - `hack/build-cluster-bootstrap.sh <cluster>` — exits 0, and `KUBECONFIG=~/.kube/<cluster> kubectl --context <ctx> -n build get secret -o name` lists `buildkit-push` (names only, never values)
 - `ALLOW_UNTAGGED_BUILD=1 VERSION=proof make build BUILD_TARGET=local` twice, reading `docker images --no-trunc -q docker.io/bborbe/agent-claude:proof` after each — the two image IDs are equal
-- `ALLOW_UNTAGGED_BUILD=1 VERSION=proof make build upload clean BUILD_TARGET=local` — exits 0
 - `ALLOW_UNTAGGED_BUILD=1 VERSION=proof REF=<branch> make build BUILD_TARGET=<cluster>` — exits 0 and prints a digest; `crane digest docker.io/bborbe/agent-claude:proof` returns that digest
 - `kubectl -n build get pod -l job-name=build-proof -o jsonpath='{.items[0].spec.nodeName}'` — names a node in the target cluster, not the Mac. This is the check a local build plus a local push cannot fake.
+- `ALLOW_UNTAGGED_BUILD=1 VERSION=proof make buca BUILD_TARGET=local` and `ALLOW_UNTAGGED_BUILD=1 VERSION=proof REF=<branch> make buca BUILD_TARGET=<cluster>` — both exit 0. The goal's Definition of Done names `make buca` itself, so it is run once on a scratch tag: the repo's docs ban it for *release* publishing (`docs/publish-image.md:36`, `docs/local-docker-run.md:12`), and since `apply` deploys nothing the only side effect is the push, which the scratch tag confines and the next step removes.
 - `crane delete docker.io/bborbe/agent-claude:proof` — the scratch tag is gone from the public repository. `clean` cannot do this; it removes only the local image.
 
 ## Desired Behavior
@@ -79,10 +90,10 @@ The container has no Docker daemon and its `.git` is masked, so nothing here run
 ## Constraints
 
 - **`hack/` is a verbatim copy of `bborbe/go-skeleton` at `18866d9d6b0d6159829f7a9e825232608067fee7`** — `build-cluster.sh`, `build-cluster-bootstrap.sh`, `build-job.yaml`, `cluster-alias.sh`, `dockerconfig.json.tpl`. No local edit. A repo-specific need is expressed in the Makefile variables the script reads, never in the script; that is what keeps this spec reusable for the next repo.
-- **The container cannot read the go-skeleton checkout.** The dark-factory container mounts only this repo, runs with `.git` masked and has no Docker daemon, so the five files are fetched from `https://raw.githubusercontent.com/bborbe/go-skeleton/18866d9d6b0d6159829f7a9e825232608067fee7/hack/<file>` and the three shell scripts made executable. The pinned commit is what makes the copy reproducible; the operator-rung diff against that same commit is what proves it is byte-identical.
+- **The container cannot read the go-skeleton checkout.** The dark-factory container mounts only this repo, runs with `.git` masked and has no Docker daemon, so the five files are fetched from `https://raw.githubusercontent.com/bborbe/go-skeleton/18866d9d6b0d6159829f7a9e825232608067fee7/hack/<file>` and the three shell scripts made executable. The pinned commit is what makes the copy reproducible, and AC 1's `curl | diff` is what proves it is byte-identical.
 - **The reference's `BUILD_*` variables are declared in full** — `BUILD_TARGET`, `BUILD_NAMESPACE`, `BUILD_TIMEOUT`, `BUILD_REPO_URL`, `BUILD_DOCKERFILE`, `BUILD_PUSH_SECRET`, `REF`, `SOURCE_DATE_EPOCH`, `BUILD_DATE` — for parity with the reference, so this spec renders against the next repo unchanged. `build-cluster.sh` supplies defaults for four of them; declaring them here is what lets an operator override one without editing the script.
 - **The push credential is named, never inlined.** `hack/dockerconfig.json.tpl` names a TeamVault lookup key; `hack/build-cluster-bootstrap.sh` resolves it with `teamvault-cli` into a `600` temp file, uses it for one `kubectl create secret --dry-run`, and removes it on every exit path.
-- **`apply` is unchanged.** `DIRS` resolves to `cmd`, and `cmd/Makefile` includes `Makefile.folder`, whose own `DIRS` is empty — so `apply` recurses one level and runs no sub-target.
+- **`apply` deploys nothing.** `DIRS` resolves to `cmd`; `cmd/Makefile` includes `Makefile.folder`, whose `DIRS` resolves to `run-task`; and `cmd/run-task/Makefile`'s `apply` target is an explicit echo-only no-op. So `apply` recurses one level and deploys nothing, which is why `make build upload clean` and `make buca` have the same effect here.
 - **The local arm keeps its current cleaning behaviour** — `docker image prune -f`, `docker builder prune --all -f`, `rm -rf vendor` — so a local build cleans what it cleans today.
 - **`check-go-mod` is retained even though the Dockerfile no longer requires `vendor/`.** It keeps the local arm's vendored build and `clean`'s `rm -rf vendor` unchanged, and this change does not reorganise module handling.
 - **No `--pull`.** A moving base image would break the two-build image-ID equality this change establishes, and both base images are version-pinned (`golang:1.27.3`, `alpine:3.23`) except the final stage's `FROM alpine`, which is out of scope.
@@ -102,11 +113,12 @@ The container has no Docker daemon and its `.git` is masked, so nothing here run
 | `REF` resolves to a different commit in the cluster than locally | The build container compares the cloned epoch against the rendered one and exits 1 naming both values | `git fetch`, then re-run |
 | The init container's clone trips git's ownership guard | The Job reports `Running` while the build never starts; the init container exits 128 with `detected dubious ownership` | The vendored `build-job.yaml` already carries `GIT_CONFIG_*` for `/src`; a hand-rolled manifest would not |
 | The active buildx builder is not a `docker`-driver builder | `docker buildx build` writes to a separate cache, so the two-build image-ID equality does not hold | `docker buildx ls` and switch to the `*`-marked docker-driver builder |
+| docker.io rate-limits or is unavailable during a build | Both arms fail at a base-image pull; the cluster arm fails inside the Job and the local arm fails before the build starts | Wait out the window, or authenticate the pull; the base images are version-pinned, so a retry is safe |
 | `VERSION` names a tag that is not `HEAD` and `ALLOW_UNTAGGED_BUILD` is unset | `check-version-tag` exits 1 naming both the HEAD tag and the requested version | Build from the tag, or set `ALLOW_UNTAGGED_BUILD=1` for a scratch build |
 | `vendor/` is absent in the cluster clone | The Dockerfile's `go build` downloads modules instead of failing | None needed; this is the behaviour the change establishes |
-| The pinned raw URL is unreachable from the container | The fetch step fails and no `hack/` file is written | Re-run the prompt; if it persists, the reference commit must be re-fetched by hand and the prompt updated |
+| The pinned raw URL is unreachable from the container | The fetch step fails and no `hack/` file is written | Operator copies the five files from the local `go-skeleton` checkout at `18866d9d` into `hack/`, then re-runs the prompt |
 
-## Security / Abuse
+## Security / Abuse Cases
 
 - The push credential exists only inside the cluster. `hack/dockerconfig.json.tpl` names a TeamVault key, the bootstrap script renders it into a `600` temp file for one dry-run and deletes it on every exit path, and the Job mounts it read-only at `/docker-config`. Nothing in the repo, the logs or the Makefile carries the value.
 - The cluster clones the source repo anonymously. `bborbe/agent-claude` is public, which is why no git credential is needed inside the pod.
@@ -119,8 +131,8 @@ Prompts should be generated in this order — each row is a single prompt with a
 
 | # | Prompt focus | Covers DBs | Covers ACs | Depends on |
 |---|---|---|---|---|
-| 1 | Vendor the five cluster-build scripts under `hack/` at their reference modes | 1 | 1, 2 | — |
-| 2 | Dispatch `build` on `BUILD_TARGET`: the buildx local arm, the cluster arm, and the repo's variable names and prerequisites | 2, 5 | 3, 4, 5, 6, 7 | prompt 1 |
+| 1 | Vendor the five cluster-build scripts under `hack/` at their reference modes | 1, 2 | 1, 2 | — |
+| 2 | Dispatch `build` on `BUILD_TARGET`: the buildx local arm, the cluster arm, and the repo's variable names and prerequisites | 1, 3, 5 | 3, 4, 5, 6, 7 | prompt 1 |
 | 3 | Guard `upload` and `clean` for a remote target | 4 | 8 | prompt 2 |
 | 4 | Build the image without a vendored tree, off a portable base registry | 6 | 9 | — |
 | 5 | Document the build targets and record the change | 3 | 10, 11 | prompts 2, 3, 4 |
