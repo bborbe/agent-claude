@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [006-build-target-remote-build]
+summary: 'Dispatched `make build` on BUILD_TARGET: a reproducible buildx local arm and a cluster arm that invokes hack/build-cluster.sh with the repo''s own image, version and clone URL.'
+execution_id: agent-claude-build-target-exec-028-spec-006-build-target-dispatch
+dark-factory-version: v0.198.7
 created: "2026-10-26T01:36:28Z"
 queued: "2026-10-26T02:00:06Z"
+started: "2026-10-26T02:04:40Z"
+completed: "2026-10-26T02:09:38Z"
 ---
 
 <!--
