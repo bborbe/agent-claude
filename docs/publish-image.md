@@ -152,10 +152,12 @@ crane config docker.io/bborbe/agent-claude:probe-branch | jq -r '.config.Labels[
 ```
 
 Expect `vX.Y.Z` from the first and a short SHA from the second. ⚠️ **`VERSION` must not be
-release-shaped** — the `check-version-tag` guard in `Makefile.docker` matches
-`v[0-9]*.[0-9]*.[0-9]*` and refuses any `vX.Y.Z` VERSION whose `REF` differs, so a
+release-shaped** — the `VERSION`/`REF` guard in the `build` target (`Makefile.docker:66-73`)
+matches `v[0-9]*.[0-9]*.[0-9]*` and refuses any `vX.Y.Z` VERSION whose `REF` differs, so a
 `VERSION=vX.Y.Z-probe-tag` would exit 1 with *"refusing to push release tag"* and build nothing.
-A bare scratch name keeps the guard quiet while `REF=vX.Y.Z` still stamps `vX.Y.Z`.
+A bare scratch name keeps the guard quiet while `REF=vX.Y.Z` still stamps `vX.Y.Z`. (This is
+**not** `check-version-tag`, which runs `git describe --tags --exact-match HEAD` and is a
+local-arm prerequisite this arm replaces.)
 
 Delete both scratch tags with `crane delete` afterwards. ⚠️ **A Job named `build-<tag>` that
 already exists makes the script refuse** — delete it first and re-run.
