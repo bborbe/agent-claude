@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [006-build-target-remote-build]
+summary: 'Updated local-docker-run and publish-image docs for the BUILD_TARGET build targets and added one feat bullet under a new ## Unreleased in CHANGELOG.md'
+execution_id: agent-claude-build-target-exec-031-spec-006-docs-and-changelog
+dark-factory-version: v0.198.7
 created: "2026-10-26T01:36:28Z"
 queued: "2026-10-26T02:00:06Z"
+started: "2026-10-26T02:18:12Z"
+completed: "2026-10-26T02:22:53Z"
 ---
 
 <!--

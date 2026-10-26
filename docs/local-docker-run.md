@@ -25,12 +25,9 @@ mirrored image from the quant registry, and `make buca` is banned for this repo 
 ## Build
 
 Published tags exist for the cluster, but a local loop wants the image built from the tree you
-are actually iterating on. `vendor/` must exist first — the Dockerfile builds with
-`-mod=vendor`:
-
-```bash
-go mod vendor
-```
+are actually iterating on. No vendored tree is needed: the Dockerfile's `go build` resolves
+modules from the module cache when `vendor/` is absent and uses `vendor/` when it is present,
+so a fresh clone builds as-is.
 
 Build natively for the host architecture. On Apple Silicon this is the fast path; the
 `linux/amd64` build the Makefile produces is emulated and only needed for cluster parity:
@@ -43,8 +40,15 @@ docker build \
   -f Dockerfile .
 ```
 
-`DOCKER_REGISTRY` defaults to the internal mirror (`docker.prod.nuke.benjamin-borbe.de:443`)
-in the Dockerfile — override it to `docker.io` unless the laptop has mirror access.
+`DOCKER_REGISTRY` defaults to `docker.io` in the Dockerfile, so this example needs no
+override on a laptop without mirror access.
+
+Two build targets exist. `make build BUILD_TARGET=local` is the default: it builds here with
+`docker buildx build` and a commit-derived clock, and two builds of one commit produce the
+same image ID — which needs a `docker`-driver buildx builder. `make build
+BUILD_TARGET=<cluster> REF=<branch or tag>` builds as a Job in that cluster instead; see
+[`publish-image.md`](publish-image.md). A cluster build leaves no image on the invoking
+machine, so `upload` and `clean` do nothing on that arm.
 
 For cluster parity instead, `ALLOW_UNTAGGED_BUILD=1 VERSION=scratch make build` runs the
 repo's own target: same Dockerfile, `--platform=linux/amd64`, and it refuses to build unless
