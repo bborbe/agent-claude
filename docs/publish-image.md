@@ -145,15 +145,20 @@ to `--always` and the label is a bare short SHA, not `vX.Y.Z`. Do not read that 
 To exercise both, build the same tag from a tag ref and from a branch ref and compare the labels:
 
 ```bash
-make build BUILD_TARGET=<cluster> REF=vX.Y.Z VERSION=vX.Y.Z-probe-tag
-make build BUILD_TARGET=<cluster> REF=master  VERSION=vX.Y.Z-probe-branch
-crane config docker.io/bborbe/agent-claude:vX.Y.Z-probe-tag    | jq -r '.config.Labels["org.opencontainers.image.version"]'
-crane config docker.io/bborbe/agent-claude:vX.Y.Z-probe-branch | jq -r '.config.Labels["org.opencontainers.image.version"]'
+make build BUILD_TARGET=<cluster> REF=vX.Y.Z VERSION=probe-tag
+make build BUILD_TARGET=<cluster> REF=master  VERSION=probe-branch
+crane config docker.io/bborbe/agent-claude:probe-tag    | jq -r '.config.Labels["org.opencontainers.image.version"]'
+crane config docker.io/bborbe/agent-claude:probe-branch | jq -r '.config.Labels["org.opencontainers.image.version"]'
 ```
 
-Expect `vX.Y.Z` from the first and a short SHA from the second. Delete both scratch tags with
-`crane delete` afterwards. ⚠️ **A Job named `build-<tag>` that already exists makes the script
-refuse** — delete it first and re-run.
+Expect `vX.Y.Z` from the first and a short SHA from the second. ⚠️ **`VERSION` must not be
+release-shaped** — the `check-version-tag` guard in `Makefile.docker` matches
+`v[0-9]*.[0-9]*.[0-9]*` and refuses any `vX.Y.Z` VERSION whose `REF` differs, so a
+`VERSION=vX.Y.Z-probe-tag` would exit 1 with *"refusing to push release tag"* and build nothing.
+A bare scratch name keeps the guard quiet while `REF=vX.Y.Z` still stamps `vX.Y.Z`.
+
+Delete both scratch tags with `crane delete` afterwards. ⚠️ **A Job named `build-<tag>` that
+already exists makes the script refuse** — delete it first and re-run.
 
 `BUILD_GIT_COMMIT` and `BUILD_DATE` are still not forwarded. This image stamps only
 `org.opencontainers.image.version`, so no label is affected here; a repo whose Dockerfile
