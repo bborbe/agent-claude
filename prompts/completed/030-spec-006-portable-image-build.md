@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [006-build-target-remote-build]
+summary: 'Made the Dockerfile portable: dropped the explicit vendor flag so Go resolves modules from the module cache when vendor/ is absent, and defaulted DOCKER_REGISTRY to docker.io.'
+execution_id: agent-claude-build-target-exec-030-spec-006-portable-image-build
+dark-factory-version: v0.198.7
 created: "2026-10-26T01:36:28Z"
 queued: "2026-10-26T02:00:06Z"
+started: "2026-10-26T02:14:04Z"
+completed: "2026-10-26T02:18:11Z"
 ---
 
 <!--
