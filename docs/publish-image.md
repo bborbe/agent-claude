@@ -66,10 +66,10 @@ docker inspect --format '{{index .Config.Labels "org.opencontainers.image.versio
 (`docker inspect` reads the local daemon, so the pull is what makes this check work from a
 machine that did not do the build.)
 
-Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which `make build`
-feeds from `git describe --tags`. **This check is for a locally built image only**: a
-cluster-built image carries the Dockerfile's `dev` default, because that arm passes only
-`SOURCE_DATE_EPOCH` (see the note under the cluster procedure below).
+Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which the build feeds
+from `git describe --tags` on either arm: `make build` on the invoking machine, and the
+cluster Job from the cloned tree. **This check applies to both arms**, so a `dev` result means
+the build did not reach the arm that produced this image, not that the check is inapplicable.
 
 Finally, confirm the toolchain the workers need is present:
 
@@ -120,15 +120,23 @@ For a scratch build:
 ALLOW_UNTAGGED_BUILD=1 VERSION=<scratch> REF=<branch> make build BUILD_TARGET=<cluster>
 ```
 
-⚠️ **The cluster arm is not a release path yet, and the label check above does not apply
-to it.** The vendored `hack/build-job.yaml` passes only `SOURCE_DATE_EPOCH`, so a
-cluster-built image carries the Dockerfile's defaults:
-`org.opencontainers.image.version` is `dev`, not `vX.Y.Z`, and `BUILD_GIT_COMMIT` /
-`BUILD_DATE` are `none` / `unknown`. Running the Verify section's label assertion against
-a cluster-built image therefore fails by design rather than because the build is broken —
-which is exactly the kind of false red that costs an afternoon. Passing the three args
-through to the Job is the fix, and it belongs upstream in `bborbe/go-skeleton` with the
-rest of the manifest, not in a repo-local edit of a file the spec pins as a verbatim copy.
+⚠️ **This arm passes `BUILD_GIT_VERSION`, so the Verify label check applies to a
+cluster-built image exactly as it does to a local one.** The vendored `hack/build-job.yaml`
+derives the version from the cloned tree — `git describe --tags --always --dirty` written to
+`/meta/git-version` — and forwards it as a build-arg, so
+`org.opencontainers.image.version` reads `vX.Y.Z` rather than the Dockerfile's `dev` default.
+The derivation is from the tree actually built rather than from `__TAG__`, so the label cannot
+disagree with the commit it came from. ⚠️ **The fetch's `--tags` is load-bearing**: without it
+the shallow clone carries no tag ref, `git describe` falls through to `--always`, and the label
+becomes a short SHA — which fails the Verify check for a build that is otherwise correct.
+
+`BUILD_GIT_COMMIT` and `BUILD_DATE` are still not forwarded. This image stamps only
+`org.opencontainers.image.version`, so no label is affected here; a repo whose Dockerfile
+stamps `.created` / `.revision` would read `unknown` / `none` on the cluster arm.
+
+Keep this file's copy of the manifest in step with `bborbe/go-skeleton`, which owns it
+upstream — the fix belongs there first, not in a repo-local edit of a file pinned as a
+verbatim copy.
 
 `REF=` is required on this arm and has no default. `sun`, `nukedev` and `nukeprod` are
 aliases; any other value is a raw `kubectl` context name.
