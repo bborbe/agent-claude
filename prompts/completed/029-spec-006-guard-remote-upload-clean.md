@@ -1,8 +1,13 @@
 ---
-status: approved
+status: completed
 spec: [006-build-target-remote-build]
+summary: Guarded the upload and clean targets on BUILD_TARGET so remote builds skip local push/cleanup with a visible skip message while the local arm keeps its exact commands.
+execution_id: agent-claude-build-target-exec-029-spec-006-guard-remote-upload-clean
+dark-factory-version: v0.198.7
 created: "2026-10-26T01:36:28Z"
 queued: "2026-10-26T02:00:06Z"
+started: "2026-10-26T02:09:39Z"
+completed: "2026-10-26T02:14:03Z"
 ---
 
 <!--
