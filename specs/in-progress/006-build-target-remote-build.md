@@ -1,8 +1,9 @@
 ---
-status: prompted
+status: verifying
 approved: "2026-10-26T01:34:55Z"
 generating: "2026-10-26T01:34:55Z"
 prompted: "2026-10-26T01:47:51Z"
+verifying: "2026-10-26T02:22:54Z"
 branch: dark-factory/build-target-remote-build
 ---
 
@@ -10,7 +11,7 @@ branch: dark-factory/build-target-remote-build
 
 - Building the image gains a target switch: by default it still happens on the invoking machine, and any other value builds it inside a named cluster.
 - The cluster path runs the build as a Kubernetes Job that holds the registry credential inside the pod, so the credential never sits on the invoking machine.
-- The local path becomes reproducible: two builds of one commit now produce the same image ID, which plain `docker build` cannot do.
+- The local path becomes reproducible in what the recipe controls: two builds of one commit produce an identical binary and an identical image config, which plain `docker build` cannot do. The image ID itself is not compared — an image that warms a toolchain cache ships files whose contents embed build timestamps, and no exporter flag rewrites those.
 - The push and cleanup steps become no-ops on a remote target, because the Job already pushed and no local image exists.
 - The image stops requiring a vendored tree, and stops defaulting its base-image registry to a machine-specific host.
 
@@ -76,7 +77,7 @@ Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconf
 
 - `for f in build-cluster.sh build-cluster-bootstrap.sh build-job.yaml cluster-alias.sh dockerconfig.json.tpl; do diff <(git show HEAD:hack/$f) <(git -C ~/Documents/workspaces/go-skeleton show 18866d9d6b0d6159829f7a9e825232608067fee7:hack/$f) || echo "DIFF $f"; done` — prints nothing
 - `hack/build-cluster-bootstrap.sh <cluster>` — exits 0, and `KUBECONFIG=~/.kube/<cluster> kubectl --context <ctx> -n build get secret -o name` lists `buildkit-push` (names only, never values)
-- `ALLOW_UNTAGGED_BUILD=1 VERSION=proof make build BUILD_TARGET=local` twice, reading `docker images --no-trunc -q docker.io/bborbe/agent-claude:proof` after each — the two image IDs are equal
+- `ALLOW_UNTAGGED_BUILD=1 VERSION=proof make build BUILD_TARGET=local` twice, comparing the two images rather than their IDs: `docker run --rm <id> sha256sum /main` prints the same digest both times, and `docker image inspect -f '{{json .Config}}' <id>` prints the same config. The image IDs themselves will differ — see the Constraint on the warm build cache.
 - `ALLOW_UNTAGGED_BUILD=1 VERSION=proof REF=<branch> make build BUILD_TARGET=<cluster>` — exits 0 and prints a digest; `crane digest docker.io/bborbe/agent-claude:proof` returns that digest
 - `kubectl -n build get pod -l job-name=build-proof -o jsonpath='{.items[0].spec.nodeName}'` — names a node in the target cluster, not the Mac. This is the check a local build plus a local push cannot fake.
 - `ALLOW_UNTAGGED_BUILD=1 VERSION=proof make buca BUILD_TARGET=local` and `ALLOW_UNTAGGED_BUILD=1 VERSION=proof REF=<branch> make buca BUILD_TARGET=<cluster>` — both exit 0. The goal's Definition of Done names `make buca` itself, so it is run once on a scratch tag: the repo's docs ban it for *release* publishing (`docs/publish-image.md:36`, `docs/local-docker-run.md:12`), and since `apply` deploys nothing the only side effect is the push, which the scratch tag confines and the next step removes.
@@ -86,7 +87,7 @@ Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconf
 
 1. **One variable selects the machine.** `BUILD_TARGET` defaults to `local`; any other value is resolved by `hack/cluster-alias.sh` to a kubeconfig and context — `sun`, `nukedev`, `nukeprod`, or a raw context name — and the build runs as a Job there.
 2. **The cluster arm renders a per-build Job.** `hack/build-cluster.sh` substitutes the repo URL, ref, tag, image, Dockerfile path, push secret, deadline and commit epoch into `hack/build-job.yaml`, refuses to apply when a Job of that name already exists, waits for it to succeed or fail, and relays the digest lines from the build log. `REF` is a required input on this arm and has no default.
-3. **The local arm is reproducible.** `docker buildx build` writes through the `type=docker` exporter with `rewrite-timestamp=true,unpack=false`, with provenance and SBOM attestations disabled, so two builds of one commit yield one image ID. `BUILD_DATE` is the commit's date, not the wall clock.
+3. **The local arm is reproducible in what the recipe controls.** `docker buildx build` writes through the `type=docker` exporter with `rewrite-timestamp=true,unpack=false`, with provenance and SBOM attestations disabled, so two builds of one commit yield the same binary and the same image config. `BUILD_DATE` is the commit's date, not the wall clock. The image ID is not part of the claim: `rewrite-timestamp` rewrites the layer tar's timestamps, not timestamps inside file contents, so any image that ships a warmed toolchain cache is not byte-reproducible.
 4. **A remote build pushes and never loads.** The image exists in the registry and nowhere on the invoking machine, so `upload` and `clean` skip their local work when `BUILD_TARGET` is not `local`.
 5. **The repo's own variables survive the port.** The image name comes from `IMAGE`, the tag from `VERSION`, and the clone URL from `https://github.com/$(IMAGE).git`; `build` keeps `check-version-tag` and `check-go-mod` as prerequisites.
 6. **The image builds without a vendored tree, off a portable base registry.** The `go build` in the Dockerfile resolves modules from the module cache when `vendor/` is absent — the state of every cluster clone — and uses `vendor/` when it is present; the base-image default is `docker.io` rather than a machine-specific mirror host.
@@ -100,9 +101,10 @@ Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconf
 - **`apply` deploys nothing.** `DIRS` resolves to `cmd`; `cmd/Makefile` includes `Makefile.folder`, whose `DIRS` resolves to `run-task`; and `cmd/run-task/Makefile`'s `apply` target is an explicit echo-only no-op. So `apply` recurses one level and deploys nothing, which is why `make build upload clean` and `make buca` have the same effect here.
 - **The local arm keeps its current cleaning behaviour** — `docker image prune -f`, `docker builder prune --all -f`, `rm -rf vendor` — so a local build cleans what it cleans today.
 - **`check-go-mod` is retained even though the Dockerfile no longer requires `vendor/`.** It keeps the local arm's vendored build and `clean`'s `rm -rf vendor` unchanged, and this change does not reorganise module handling.
-- **No `--pull`.** A moving base image would break the two-build image-ID equality this change establishes, and both base images are version-pinned (`golang:1.27.3`, `alpine:3.23`) except the final stage's `FROM alpine`, which is out of scope.
+- **No `--pull`.** A moving base image would break the binary-and-config equality this change establishes, and both base images are version-pinned (`golang:1.27.3`, `alpine:3.23`) except the final stage's `FROM alpine`, which is out of scope.
 - **`--no-cache` is retained**, so a local build still recompiles rather than trusting a stale layer. `--rm=true` is dropped: buildx removes intermediate containers unconditionally, so it is a no-op there. `--platform=linux/amd64` is retained.
-- **`SOURCE_DATE_EPOCH` needs no `ARG` in the Dockerfile.** BuildKit's dockerfile frontend reads it from the build-arg set to drive the exporter's `rewrite-timestamp`, which is what the two-build image-ID equality measures.
+- **`SOURCE_DATE_EPOCH` needs no `ARG` in the Dockerfile.** BuildKit's dockerfile frontend reads it from the build-arg set to drive the exporter's `rewrite-timestamp`, which normalises the layer tar's timestamps — not the timestamps inside the files that tar carries.
+- **A warmed toolchain cache bounds reproducibility, and the bound is not the recipe's to close.** `rewrite-timestamp` rewrites timestamps in the layer tar; it cannot rewrite timestamps inside file contents. This repo's image deliberately ships a warm Go build cache (`Dockerfile:112-120` — a pod's first `make check` is 70 s warm versus 601 s cold), and cache entries embed build timestamps, so two builds of one commit differ in **16,216 files, all under `/home/claude/.cache/go-build`**, while the compiled binary and the image config are identical. Measured on this repo 2026-10-26. The consequence for this spec's reusability: **the reproducible claim covers the binary and the image config, never the image ID**, and the next repo inherits the same limit the moment its image warms a cache. Do not attempt to close it by deleting the cache — that trades a reproducibility assertion nobody consumes for 531 s on every pod's first check.
 
 ## Failure Modes
 
@@ -116,7 +118,7 @@ Prerequisites, all of which the reference guide lists: `kubectl` plus a kubeconf
 | A Job with the derived name already exists | `hack/build-cluster.sh` refuses and names the delete command | `kubectl -n build delete job <name>`, then re-run |
 | `REF` resolves to a different commit in the cluster than locally | The build container compares the cloned epoch against the rendered one and exits 1 naming both values | `git fetch`, then re-run |
 | The init container's clone trips git's ownership guard | The Job reports `Running` while the build never starts; the init container exits 128 with `detected dubious ownership` | The vendored `build-job.yaml` already carries `GIT_CONFIG_*` for `/src`; a hand-rolled manifest would not |
-| The active buildx builder is not a `docker`-driver builder | `docker buildx build` writes to a separate cache, so the two-build image-ID equality does not hold | `docker buildx ls` and switch to the `*`-marked docker-driver builder |
+| The active buildx builder is not a `docker`-driver builder | `docker buildx build` writes to a separate cache, so the config equality does not hold (the compiled binary is unaffected — same source, Dockerfile and build args) | `docker buildx ls` and switch to the `*`-marked docker-driver builder |
 | docker.io rate-limits or is unavailable during a build | Both arms fail at a base-image pull; the cluster arm fails inside the Job and the local arm fails before the build starts | Wait out the window, or authenticate the pull; the base images are version-pinned, so a retry is safe |
 | `VERSION` names a tag that is not `HEAD` and `ALLOW_UNTAGGED_BUILD` is unset | `check-version-tag` exits 1 naming both the HEAD tag and the requested version | Build from the tag, or set `ALLOW_UNTAGGED_BUILD=1` for a scratch build |
 | `vendor/` is absent in the cluster clone | The Dockerfile's `go build` downloads modules instead of failing | None needed; this is the behaviour the change establishes |
