@@ -14,7 +14,11 @@ stuck and every pod pinning that tag in `ImagePullBackOff`.
 
 ## Prerequisites
 
-- Docker running.
+- Docker running, with the `buildx` plugin and a `docker`-driver builder selected
+  (`docker buildx ls` marks it with `*`). The local arm builds through `docker buildx build`,
+  so a Docker install without buildx fails with `docker: 'buildx' is not a docker command`,
+  and a container-driver builder writes to a separate cache, which breaks the two-build
+  equality described under the local procedure.
 - `docker login` as the `bborbe` Docker Hub account. The credential is the operator's own —
   never store it in the repo, in a GitHub secret, or in a shell transcript.
 
@@ -63,7 +67,9 @@ docker inspect --format '{{index .Config.Labels "org.opencontainers.image.versio
 machine that did not do the build.)
 
 Expect exactly `vX.Y.Z` — the label is stamped from `BUILD_GIT_VERSION`, which `make build`
-feeds from `git describe --tags`.
+feeds from `git describe --tags`. **This check is for a locally built image only**: a
+cluster-built image carries the Dockerfile's `dev` default, because that arm passes only
+`SOURCE_DATE_EPOCH` (see the note under the cluster procedure below).
 
 Finally, confirm the toolchain the workers need is present:
 
@@ -72,6 +78,92 @@ docker run --rm --entrypoint git docker.io/bborbe/agent-claude:vX.Y.Z --version
 ```
 
 Expect `git version …`.
+
+## Build in the cluster
+
+The local procedure above runs on the invoking machine and needs `docker login` there. The
+cluster arm does not: `make build BUILD_TARGET=<cluster>` runs the build as a Kubernetes Job
+in the target cluster, the Job mounts the push secret and pushes
+`docker.io/bborbe/agent-claude` itself, so the registry credential never sits on the invoking
+machine.
+
+The two arms are equivalent in *where* they build, not in the bytes they emit. The Job passes
+only the commit epoch, so a cluster-built image carries the Dockerfile's `dev` / `none` /
+`unknown` version defaults while a local build stamps real values. That divergence is
+recorded, not closed — do not read a cluster arm's missing version label as a build failure.
+
+### Prerequisites
+
+- `kubectl` with a kubeconfig for the target cluster.
+- `crane`, to read the digest and to delete a scratch tag.
+- `teamvault-cli`, logged in to the account holding the registry key.
+- `docker login` is **not** needed on this arm; only the local procedure above needs it.
+
+### One-time provisioning
+
+Before the first cluster build against a cluster, provision its prerequisites:
+
+```bash
+hack/build-cluster-bootstrap.sh <cluster>
+```
+
+It is idempotent: it creates the `build` namespace and the `buildkit-push` Secret and exits 0
+on a re-run. Re-running it is also the fix when the secret is missing, or when `buildkit-push`
+was replaced with the reflector's `docker` secret — that one mirrors a different registry, and
+a build mounting it fails at push with an error that reads like a build bug.
+
+### Build
+
+For a scratch build:
+
+```bash
+ALLOW_UNTAGGED_BUILD=1 VERSION=<scratch> REF=<branch> make build BUILD_TARGET=<cluster>
+```
+
+⚠️ **The cluster arm is not a release path yet, and the label check above does not apply
+to it.** The vendored `hack/build-job.yaml` passes only `SOURCE_DATE_EPOCH`, so a
+cluster-built image carries the Dockerfile's defaults:
+`org.opencontainers.image.version` is `dev`, not `vX.Y.Z`, and `BUILD_GIT_COMMIT` /
+`BUILD_DATE` are `none` / `unknown`. Running the Verify section's label assertion against
+a cluster-built image therefore fails by design rather than because the build is broken —
+which is exactly the kind of false red that costs an afternoon. Passing the three args
+through to the Job is the fix, and it belongs upstream in `bborbe/go-skeleton` with the
+rest of the manifest, not in a repo-local edit of a file the spec pins as a verbatim copy.
+
+`REF=` is required on this arm and has no default. `sun`, `nukedev` and `nukeprod` are
+aliases; any other value is a raw `kubectl` context name.
+
+**When it refuses.** A Job named `build-` plus the tag lowercased and sanitised, which already
+exists, makes the script refuse and print its own delete command (`kubectl -n build delete job
+<name>`); delete it and re-run. A `REF` whose cluster commit differs from the local one fails
+the build container with both epochs named; run `git fetch` and re-run.
+
+### Verify
+
+The build prints a digest; the registry must return the same one:
+
+```bash
+crane digest docker.io/bborbe/agent-claude:<tag>
+```
+
+Then confirm the build actually ran in the cluster — the check a local build plus a local push
+cannot fake:
+
+```bash
+kubectl -n build get pod -l job-name=build-<tag-lowercased> -o jsonpath='{.items[0].spec.nodeName}'
+```
+
+That names a node in the target cluster, not the invoking machine.
+
+### Clean up a scratch tag
+
+A scratch build publishes a public tag. Remove it when done:
+
+```bash
+crane delete docker.io/bborbe/agent-claude:<scratch>
+```
+
+`clean` cannot do this — it removes only the local image, and the cluster arm leaves none.
 
 ## After publishing
 
