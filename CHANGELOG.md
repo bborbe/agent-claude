@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.26.0
 
 - feat: dispatch `make build` on `BUILD_TARGET` — `local` (the default) builds on the invoking machine with `docker buildx build` and a commit-derived clock, producing the same binary and image config for two builds of one commit (the image ID itself differs, because the image ships a warm Go build cache whose file contents embed build timestamps), while any other value runs the build as a Job in that cluster via the vendored `hack/` scripts, with the registry credential held only inside the pod; `upload` and `clean` are no-ops on the cluster arm because the Job already pushed and no local image exists; and the image no longer requires a vendored tree and defaults its base registry to `docker.io`.
 
