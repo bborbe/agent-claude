@@ -45,7 +45,10 @@ override on a laptop without mirror access.
 
 Two build targets exist. `make build BUILD_TARGET=local` is the default: it builds here with
 `docker buildx build` and a commit-derived clock, and two builds of one commit produce the
-same image ID — which needs a `docker`-driver buildx builder. `make build
+same binary and the same image config — which needs a `docker`-driver buildx builder. The
+image ID itself will differ: the image ships a warm Go build cache whose file contents embed
+build timestamps, and the exporter's timestamp rewrite normalises the layer tar, not those
+contents. `make build
 BUILD_TARGET=<cluster> REF=<branch or tag>` builds as a Job in that cluster instead; see
 [`publish-image.md`](publish-image.md). A cluster build leaves no image on the invoking
 machine, so `upload` and `clean` do nothing on that arm.
