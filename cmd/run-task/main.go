@@ -67,8 +67,8 @@ type application struct {
 	// set only on the pod never reaches the Bash tool. Dedicated fields rather than
 	// CLAUDE_ENV entries because CLAUDE_ENV is a comma-separated bag and NO_PROXY is
 	// itself a comma-separated list — packing it there truncates it silently.
-	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"  display:"length"`
-	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child" display:"length"`
+	HTTPProxy  string `required:"false" arg:"http-proxy"  env:"HTTP_PROXY"  usage:"HTTP proxy forwarded to the Claude child"        display:"length"`
+	HTTPSProxy string `required:"false" arg:"https-proxy" env:"HTTPS_PROXY" usage:"HTTPS proxy forwarded to the Claude child"       display:"length"`
 	NoProxy    string `required:"false" arg:"no-proxy"    env:"NO_PROXY"    usage:"Proxy bypass list forwarded to the Claude child" display:"length"`
 
 	// Environment
