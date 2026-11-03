@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.26.6
 
 - fix: update github.com/bborbe/agent to v0.139.2, so an agent-claude Job whose `ALLOWED_TOOLS` omits a tool is refused instead of silently running it. The runner now passes `--permission-mode dontAsk` alongside `--allowedTools`, and a conditional `--disallowedTools Edit Write` when the list contains neither write tool, so an agent configured read-only can no longer edit files or run arbitrary Bash; a decider-less streaming session is restricted the same way, while a session with a permission decider keeps its `manual` mode. An agent that configures no `ALLOWED_TOOLS` is unchanged.
 
