@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: update github.com/bborbe/agent to v0.139.4, so the runner's child-process environment is logged by key **name only** — no value is written to the Job's pod log whatever the variable is called. The previous redaction was a denylist of key markers, which is what let `GITHUB_APP_PEM` through: the name matched no marker. `envparse.KeysOnly` replaces it at both env-logging call sites (the claude runner and the pi runner), and `envparse.RedactForLog` now stars every value rather than only marker-matched ones.
+
 ## v0.26.6
 
 - fix: update github.com/bborbe/agent to v0.139.2, so an agent-claude Job whose `ALLOWED_TOOLS` omits a tool is refused instead of silently running it. The runner now passes `--permission-mode dontAsk` alongside `--allowedTools`, and a conditional `--disallowedTools Edit Write` when the list contains neither write tool, so an agent configured read-only can no longer edit files or run arbitrary Bash; a decider-less streaming session is restricted the same way, while a session with a permission decider keeps its `manual` mode. An agent that configures no `ALLOWED_TOOLS` is unchanged.
