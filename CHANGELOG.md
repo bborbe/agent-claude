@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.26.8
 
 - fix: update github.com/bborbe/agent to v0.139.5, so a task whose body already carries an **empty** output-section heading is re-dispatched instead of being treated as finished. `agentStep.ShouldRun` skipped whenever the section existed, and an empty body matched neither the success nor the failure marker, so every dispatch returned no result and the Job failed in ~50 ms without ever invoking claude. An empty or whitespace-only body now re-runs; a section with content still skips, and the `## Failure` rule is unchanged.
 
