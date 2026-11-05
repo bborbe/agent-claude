@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix: update github.com/bborbe/agent to v0.139.5, so a task whose body already carries an **empty** output-section heading is re-dispatched instead of being treated as finished. `agentStep.ShouldRun` skipped whenever the section existed, and an empty body matched neither the success nor the failure marker, so every dispatch returned no result and the Job failed in ~50 ms without ever invoking claude. An empty or whitespace-only body now re-runs; a section with content still skips, and the `## Failure` rule is unchanged.
+
 ## v0.26.7
 
 - fix: update github.com/bborbe/agent to v0.139.4, so the runner's child-process environment is logged by key **name only** — no value is written to the Job's pod log whatever the variable is called. The previous redaction was a denylist of key markers, which is what let `GITHUB_APP_PEM` through: the name matched no marker. `envparse.KeysOnly` replaces it at both env-logging call sites (the claude runner and the pi runner), and `envparse.RedactForLog` now stars every value rather than only marker-matched ones.
