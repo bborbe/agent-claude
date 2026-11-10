@@ -122,6 +122,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 		a.AnthropicModel,
 		claudeEnv,
+		claudelib.SessionID(""),
 		a.EnvContextRaw.Pairs(),
 	)
 

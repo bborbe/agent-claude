@@ -136,6 +136,23 @@ var _ = Describe("application argument parsing", func() {
 		Expect(argument.Parse(ctx, app)).To(Succeed())
 		Expect(app.EnvContextRaw.Pairs()).To(Equal(map[string]string{"A": "1", "B": "2"}))
 	})
+
+	// A struct-field assertion alone would not catch a typo in the env tag, so
+	// this parses the real variable the executor writes.
+	It("binds CLAUDE_SESSION_ID into the struct field", func() {
+		Expect(os.Setenv("CLAUDE_SESSION_ID", "sess-executor")).To(Succeed())
+		DeferCleanup(func() { _ = os.Unsetenv("CLAUDE_SESSION_ID") })
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.SessionID).To(Equal(claudelib.SessionID("sess-executor")))
+	})
+
+	It("leaves CLAUDE_SESSION_ID empty when unset", func() {
+		Expect(os.Unsetenv("CLAUDE_SESSION_ID")).To(Succeed())
+		app := &application{}
+		Expect(argument.Parse(ctx, app)).To(Succeed())
+		Expect(app.SessionID).To(BeEmpty())
+	})
 })
 
 // The startup configuration log is written by a library
@@ -681,6 +698,7 @@ var _ = Describe("application.Run nil result", func() {
 		claudelib.AllowedTools,
 		claudelib.ClaudeModel,
 		map[string]string,
+		claudelib.SessionID,
 		map[string]string,
 	) agentlib.AgentProvider
 
@@ -708,6 +726,7 @@ var _ = Describe("application.Run nil result", func() {
 			_ claudelib.AllowedTools,
 			_ claudelib.ClaudeModel,
 			_ map[string]string,
+			_ claudelib.SessionID,
 			_ map[string]string,
 		) agentlib.AgentProvider {
 			return provider
@@ -748,6 +767,7 @@ var _ = Describe("application.Run nil result", func() {
 			_ claudelib.AllowedTools,
 			_ claudelib.ClaudeModel,
 			_ map[string]string,
+			_ claudelib.SessionID,
 			_ map[string]string,
 		) agentlib.AgentProvider {
 			return provider
@@ -781,6 +801,7 @@ var _ = Describe("application.Run nil result", func() {
 			_ claudelib.AllowedTools,
 			_ claudelib.ClaudeModel,
 			_ map[string]string,
+			_ claudelib.SessionID,
 			_ map[string]string,
 		) agentlib.AgentProvider {
 			return provider
@@ -796,6 +817,36 @@ var _ = Describe("application.Run nil result", func() {
 		err := app.Run(ctx, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("agent run failed"))
+	})
+
+	// The library's own shape check admits a leading '-', so a value beginning
+	// with "--" would otherwise reach the argv as a flag. Run must reject it
+	// before the provider is built.
+	It("rejects a session id starting with -- without building an agent", func() {
+		createAgentProvider = func(
+			_ claudelib.ClaudeConfigDir,
+			_ claudelib.AgentDir,
+			_ claudelib.AllowedTools,
+			_ claudelib.ClaudeModel,
+			_ map[string]string,
+			_ claudelib.SessionID,
+			_ map[string]string,
+		) agentlib.AgentProvider {
+			Fail("createAgentProvider must not be called for an invalid session id")
+			return nil
+		}
+
+		app := &application{
+			SessionID:      claudelib.SessionID("--evil"),
+			Phase:          "execution",
+			TaskContent:    "# a task",
+			TaskType:       string(agentlib.TaskTypeLLM),
+			PushgatewayURL: "http://127.0.0.1:1",
+		}
+
+		err := app.Run(ctx, nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid session id"))
 	})
 })
 
