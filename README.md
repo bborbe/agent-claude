@@ -103,6 +103,7 @@ the ConfigMap — granted in the config repo, not here.
 | `ALLOWED_TOOLS` | no | — | Comma-separated Claude tool allowlist (e.g. `Read,Grep,Bash`) |
 | `AGENT_DIR` | no | `agent` | Directory containing `.claude/CLAUDE.md` guardrails |
 | `CLAUDE_CONFIG_DIR` | no | — | Claude Code OAuth config directory (PVC mount) |
+| `CLAUDE_SESSION_ID` | no | — | Session id the executor injects; the Claude CLI adopts it. Unset means the CLI picks its own |
 | `ENV_CONTEXT` | no | — | Comma-separated `KEY=VAL` pairs injected into the prompt |
 | `CLAUDE_ENV` | no | — | Comma-separated `KEY=VAL` pairs passed to the Claude CLI subprocess |
 | `POD_ATTENTION_STORE_URL` | no | — | Attention store base URL forwarded to the Claude CLI subprocess; omitted when unset |
