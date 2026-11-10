@@ -39,18 +39,20 @@ func CreateClaudeRunner(
 	allowedTools claudelib.AllowedTools,
 	model claudelib.ClaudeModel,
 	env map[string]string,
+	sessionID claudelib.SessionID,
 ) claudelib.ClaudeRunner {
 	return claudelib.NewClaudeRunner(claudelib.ClaudeRunnerConfig{
 		ClaudeConfigDir:  claudeConfigDir,
 		AllowedTools:     allowedTools,
 		Model:            model,
+		SessionID:        sessionID,
 		WorkingDirectory: agentDir,
 		Env:              env,
 	})
 }
 
 // CreateClaudeSessionFactory constructs the per-session factory the interactive
-// service holds one conversation per session id with. It takes the same five
+// service holds one conversation per session id with. It takes the same
 // parameters as CreateClaudeRunner, plus the permission decider below, and
 // configures the session's held process identically.
 //
@@ -65,18 +67,24 @@ func CreateClaudeRunner(
 // --permission-prompt-tool stdio, so a tool invocation outside the configured
 // allowlist fails that turn loudly instead of blocking on a decider nobody
 // answers.
+//
+// The config's SessionID is the only CLI session id: the library's
+// sessionFactory.Create discards its id argument, so every conversation this
+// factory serves shares one CLI identity and one transcript.
 func CreateClaudeSessionFactory(
 	claudeConfigDir claudelib.ClaudeConfigDir,
 	agentDir claudelib.AgentDir,
 	allowedTools claudelib.AllowedTools,
 	model claudelib.ClaudeModel,
 	env map[string]string,
+	sessionID claudelib.SessionID,
 	permissions claudelib.PermissionDecider,
 ) agentlib.SessionFactory {
 	return claudelib.NewSessionFactory(claudelib.ClaudeRunnerConfig{
 		ClaudeConfigDir:  claudeConfigDir,
 		AllowedTools:     allowedTools,
 		Model:            model,
+		SessionID:        sessionID,
 		WorkingDirectory: agentDir,
 		Env:              env,
 	}, permissions)
@@ -132,10 +140,11 @@ func CreateAgent(
 	allowedTools claudelib.AllowedTools,
 	model claudelib.ClaudeModel,
 	claudeEnv map[string]string,
+	sessionID claudelib.SessionID,
 	envContext map[string]string,
 ) *agentlib.Agent {
 	return CreateAgentFromRunner(
-		CreateClaudeRunner(claudeConfigDir, agentDir, allowedTools, model, claudeEnv),
+		CreateClaudeRunner(claudeConfigDir, agentDir, allowedTools, model, claudeEnv, sessionID),
 		envContext,
 	)
 }
@@ -175,9 +184,17 @@ func CreateAgentProvider(
 	allowedTools claudelib.AllowedTools,
 	model claudelib.ClaudeModel,
 	claudeEnv map[string]string,
+	sessionID claudelib.SessionID,
 	envContext map[string]string,
 ) agentlib.AgentProvider {
-	runner := CreateClaudeRunner(claudeConfigDir, agentDir, allowedTools, model, claudeEnv)
+	runner := CreateClaudeRunner(
+		claudeConfigDir,
+		agentDir,
+		allowedTools,
+		model,
+		claudeEnv,
+		sessionID,
+	)
 	domainAgent := CreateAgentFromRunner(runner, envContext)
 	livenessAgent := healthcheck.NewAgent(healthcheck.NewClaudeStep(runner))
 	return agentlib.NewAgentProvider(serviceName, map[agentlib.TaskType]*agentlib.Agent{

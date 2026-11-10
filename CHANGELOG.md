@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - feat: `make build` resolves `BUILD_TARGET` from a bounded sun probe - sun when reachable, local docker as the fallback. An explicit `BUILD_TARGET` always wins, and the decision prints at parse time so it is visible under `make -n`
 
+## v0.27.0
+
+- feat: adopt the executor-injected `CLAUDE_SESSION_ID` as the Claude CLI session id (`--session-id`) in both task and service mode, rejecting an id that does not match the intake pattern before it reaches the argv
+
+## v0.26.10
+
+- chore: update github.com/a2aproject/a2a-go/v2 to v2.8.0, github.com/bborbe/agent to v0.139.7, github.com/bborbe/k8s to v1.14.32, github.com/bborbe/kafka to v1.29.12, github.com/bborbe/time to v1.27.26, github.com/bborbe/vault-cli to v0.191.0, k8s.io/api to v0.38.0-beta.0, k8s.io/apimachinery to v0.38.0-beta.0
+
 ## v0.26.9
 
 - chore: restate the do-not-merge contract in the gate workflow

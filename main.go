@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -49,6 +50,12 @@ import (
 // agentName is the identity string used for Prometheus metric grouping and logging.
 const agentName = "claude-agent"
 
+// sessionIDPattern is the allowed session id format. It mirrors the library's
+// intake pattern (github.com/bborbe/agent/interactive/session-id.go) and, unlike
+// the CLI package's own 1..128 [A-Za-z0-9-] check, it rejects a leading '-', so a
+// value beginning with "--" can never reach the argv as a flag.
+var sessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$`)
+
 func main() {
 	app := &application{}
 	os.Exit(service.Main(context.Background(), app, &app.SentryDSN, &app.SentryProxy))
@@ -60,6 +67,11 @@ type application struct {
 
 	// Claude Code CLI configuration
 	ClaudeConfigDir claudelib.ClaudeConfigDir `required:"false" arg:"claude-config-dir" env:"CLAUDE_CONFIG_DIR" usage:"Claude Code config directory"`
+
+	// SessionID is the CLI session id the executor injects; the Claude CLI adopts
+	// it via --session-id. Empty means the CLI picks its own id, leaving the argv
+	// unchanged.
+	SessionID claudelib.SessionID `required:"false" arg:"session-id" env:"CLAUDE_SESSION_ID" usage:"Session id the executor injects; the Claude CLI adopts it. Unset means the CLI picks its own id"`
 
 	// Agent directory (contains .claude/ with CLAUDE.md and commands)
 	AgentDir claudelib.AgentDir `required:"false" arg:"agent-dir" env:"AGENT_DIR" usage:"Agent directory with .claude/ config" default:"agent"`
@@ -245,6 +257,14 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 
 	claudeEnv := a.buildClaudeEnv()
 
+	// The library validates the session id's shape before spawning, but its
+	// pattern admits a leading '-', which would let a value such as "--evil"
+	// reach the argv as a flag. Reject it here, before either agent shape sees
+	// the value.
+	if a.SessionID != "" && !sessionIDPattern.MatchString(string(a.SessionID)) {
+		return errors.Errorf(ctx, "invalid session id")
+	}
+
 	if a.AgentType == factory.AgentTypeService {
 		return a.runService(ctx, registry, claudeEnv)
 	}
@@ -264,6 +284,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 		a.AnthropicModel,
 		claudeEnv,
+		a.SessionID,
 		a.EnvContextRaw.Pairs(),
 	)
 	agent, err := provider.Get(ctx, agentlib.TaskType(a.TaskType))
@@ -439,6 +460,7 @@ func (a *application) runService(
 			claudelib.ParseAllowedTools(a.AllowedToolsRaw),
 			a.AnthropicModel,
 			claudeEnv,
+			a.SessionID,
 			decider,
 		),
 		recorder,

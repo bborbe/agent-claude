@@ -6,6 +6,10 @@ package factory_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
 
 	agentlib "github.com/bborbe/agent"
 	claudelib "github.com/bborbe/agent/claude"
@@ -30,6 +34,7 @@ var _ = Describe("CreateAgentProvider", func() {
 			claudelib.AllowedTools{},
 			claudelib.ClaudeModel("sonnet"),
 			map[string]string{},
+			claudelib.SessionID(""),
 			map[string]string{},
 		)
 	})
@@ -134,7 +139,15 @@ var _ = Describe("AgentTypeService", func() {
 
 var _ = Describe("CreateClaudeSessionFactory", func() {
 	It("returns a non-nil SessionFactory", func() {
-		sessions := factory.CreateClaudeSessionFactory("", "", nil, "", nil, nil)
+		sessions := factory.CreateClaudeSessionFactory(
+			"",
+			"",
+			nil,
+			"",
+			nil,
+			claudelib.SessionID(""),
+			nil,
+		)
 		Expect(sessions).NotTo(BeNil())
 	})
 })
@@ -147,8 +160,103 @@ var _ = Describe("CreateAgent", func() {
 			nil,
 			"",
 			nil,
+			claudelib.SessionID(""),
 			nil,
 		)
 		Expect(agent).NotTo(BeNil())
+	})
+})
+
+// The session id is only useful if it reaches the spawned process, so these
+// specs drive a real runner against a stub `claude` on PATH and read the argv
+// the process actually received. A config-field assertion would prove only that
+// the value was stored, not that the library turned it into --session-id.
+var _ = Describe("CreateClaudeRunner session id argv", func() {
+	var (
+		ctx      context.Context
+		binDir   string
+		argvDir  string
+		origPath string
+	)
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		binDir = GinkgoT().TempDir()
+		argvDir = GinkgoT().TempDir()
+		// The runner needs a stream-json result event to finish a turn; a bare
+		// echo of the args would fail the run before the argv could be asserted.
+		script := "#!/bin/sh\n" +
+			"printf '%s\\n' \"$@\" > \"$ARGV_FILE\"\n" +
+			"printf '{\"type\":\"result\",\"result\":\"ok\"}\\n'\n" +
+			"exit 0\n"
+		Expect(
+			os.WriteFile(filepath.Join(binDir, "claude"), []byte(script), 0755), //nolint:gosec
+		).To(Succeed())
+		origPath = os.Getenv("PATH")
+		Expect(os.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		_ = os.Setenv("PATH", origPath)
+	})
+
+	readArgv := func(argvFile string) []string {
+		data, err := os.ReadFile(argvFile)
+		Expect(err).NotTo(HaveOccurred())
+		return strings.Split(strings.TrimSpace(string(data)), "\n")
+	}
+
+	It("passes a non-empty id as --session-id followed by the id", func() {
+		argvFile := filepath.Join(argvDir, "argv")
+		runner := factory.CreateClaudeRunner(
+			"",
+			"",
+			nil,
+			"",
+			map[string]string{"ARGV_FILE": argvFile},
+			claudelib.SessionID("sess-fixed"),
+		)
+
+		result, err := runner.Run(ctx, "prompt")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Result).To(Equal("ok"))
+
+		argv := readArgv(argvFile)
+		index := slices.Index(argv, "--session-id")
+		Expect(index).NotTo(Equal(-1))
+		Expect(argv[index+1]).To(Equal("sess-fixed"))
+	})
+
+	It("omits --session-id when the id is empty", func() {
+		argvFile := filepath.Join(argvDir, "argv")
+		runner := factory.CreateClaudeRunner(
+			"",
+			"",
+			nil,
+			"",
+			map[string]string{"ARGV_FILE": argvFile},
+			claudelib.SessionID(""),
+		)
+
+		result, err := runner.Run(ctx, "prompt")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Result).To(Equal("ok"))
+
+		Expect(readArgv(argvFile)).NotTo(ContainElement("--session-id"))
+	})
+
+	It("rejects an invalid id before starting the process", func() {
+		runner := factory.CreateClaudeRunner(
+			"",
+			"",
+			nil,
+			"",
+			map[string]string{"ARGV_FILE": filepath.Join(argvDir, "argv")},
+			claudelib.SessionID("bad/id"),
+		)
+
+		_, err := runner.Run(ctx, "prompt")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid SessionID"))
 	})
 })
