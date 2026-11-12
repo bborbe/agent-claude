@@ -1,5 +1,5 @@
 ARG DOCKER_REGISTRY=docker.io
-FROM ${DOCKER_REGISTRY}/golang:1.27.3 AS build
+FROM ${DOCKER_REGISTRY}/golang:1.27.4 AS build
 ARG BUILD_GIT_VERSION=dev
 ARG BUILD_GIT_COMMIT=none
 ARG BUILD_DATE=unknown
@@ -120,7 +120,7 @@ COPY --from=build /usr/local/go/lib/time/zoneinfo.zip /
 # pins, and a repo pinning a different version pays its own compile as before.
 #
 # ⚠️ `go` is COPIED from the build stage, NOT `apk add`-ed, and that is load-bearing.
-# The build stage is `golang:1.27.3`. This repo's own `Makefile.precommit` had
+# The build stage is `golang:1.27.4`. This repo's own `Makefile.precommit` had
 # recorded 1.27.2 as **not adoptable here**: `errcheck` v1.20.0 — then the newest
 # release — could not read 1.27.2 export data, so the whole check chain stopped.
 # 1.27.3 is adopted on 2026-10-21 because `GO-2026-6809` fails the vulncheck gate
