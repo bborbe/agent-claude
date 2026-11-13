@@ -88,37 +88,34 @@ splice_section() {
 }
 
 main() {
-  if [ -z "${GATEWAY_SECRET:-}" ]; then
-    echo "vault-set-section.sh: GATEWAY_SECRET is required" >&2
-    exit 1
-  fi
-
   if [ "$#" -ne 3 ]; then
     echo "usage: vault-set-section.sh <repo-relative-path> <heading> <content-file>" >&2
     exit 2
   fi
 
+  # VAULT_API_URL selects the vault service; GATEWAY_SECRET is OPTIONAL and the
+  # header is sent only when set — see vault-read.sh's header for why.
   local path="${1// /%20}"
   local heading="$2"
   local content_file="$3"
-  local initiator_header="X-Gateway-Initator: agent-claude"
-  local secret_header="X-Gateway-Secret: $GATEWAY_SECRET"
-  local base="http://vault-obsidian-personal:9090"
+  local base="${VAULT_API_URL:-http://vault-obsidian-personal:9090}"
+  local headers=(-H "X-Gateway-Initator: agent-claude")
+  if [ -n "${GATEWAY_SECRET:-}" ]; then
+    headers+=(-H "X-Gateway-Secret: $GATEWAY_SECRET")
+  fi
 
   tmp_src=$(mktemp)
   tmp_out=$(mktemp)
 
   curl -sf --max-time 30 \
-    -H "$initiator_header" \
-    -H "$secret_header" \
+    "${headers[@]}" \
     "${base}/api/v1/files/${path}" > "$tmp_src"
 
   splice_section "$tmp_src" "$heading" "$content_file" > "$tmp_out"
 
   curl -sf --max-time 30 \
     -X POST \
-    -H "$initiator_header" \
-    -H "$secret_header" \
+    "${headers[@]}" \
     -H 'Content-Type: application/octet-stream' \
     --data-binary "@${tmp_out}" \
     "${base}/api/v1/files/${path}"

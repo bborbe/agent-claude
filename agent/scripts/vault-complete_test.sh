@@ -194,16 +194,35 @@ else
   bad "process: no temporary files left behind on the success path (before=${before} after=${after})"
 fi
 
-# Missing secret: fails before any request, with the :? message.
+# The secret is OPTIONAL: a vault service configured with no gateway secret
+# (sun's git-rest) must still work, so an unset GATEWAY_SECRET has to succeed AND
+# send no secret header. Both halves are asserted — "it did not fail" alone also
+# passes for a helper that sent an empty header, which a validating server rejects.
+: > "${VAULT_TEST_ARGV}"
 env -u GATEWAY_SECRET PATH="${tmp}/bin:${PATH}" TMPDIR="${tmp}/spill" \
   bash "${here}/vault-complete.sh" 'tasks/proc.md' \
   > "${tmp}/nosecret_out.txt" 2> "${tmp}/nosecret_err.txt"
 rc_nosecret=$?
 
-if [ "$rc_nosecret" -ne 0 ] && grep -q 'GATEWAY_SECRET is required' "${tmp}/nosecret_err.txt"; then
-  pass "process: missing GATEWAY_SECRET exits non-zero with the required message"
+if [ "$rc_nosecret" -eq 0 ] \
+  && [ -s "${VAULT_TEST_ARGV}" ] \
+  && ! grep -q 'X-Gateway-Secret' "${VAULT_TEST_ARGV}"; then
+  pass "process: unset GATEWAY_SECRET succeeds and sends no secret header"
 else
-  bad "process: missing GATEWAY_SECRET exits non-zero with the required message (rc=${rc_nosecret})"
+  bad "process: unset GATEWAY_SECRET succeeds and sends no secret header (rc=${rc_nosecret}, argv=$(tr '\n' '|' < "${VAULT_TEST_ARGV}"))"
+fi
+
+# VAULT_API_URL selects the service, and the default must not leak back in.
+: > "${VAULT_TEST_ARGV}"
+PATH="${tmp}/bin:${PATH}" VAULT_API_URL='http://git-rest-openclaw:9090' \
+  GATEWAY_SECRET=dummy TMPDIR="${tmp}/spill" \
+  bash "${here}/vault-complete.sh" 'tasks/proc.md' > /dev/null 2>&1
+
+if grep -q 'http://git-rest-openclaw:9090/api/v1/files/tasks/proc.md' "${VAULT_TEST_ARGV}" \
+  && ! grep -q 'vault-obsidian-personal' "${VAULT_TEST_ARGV}"; then
+  pass "process: VAULT_API_URL replaces the default vault host"
+else
+  bad "process: VAULT_API_URL replaces the default vault host (argv=$(tr '\n' '|' < "${VAULT_TEST_ARGV}"))"
 fi
 
 : > "${tmp}/fail-post"
