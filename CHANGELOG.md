@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.29.0
 
 - fix(vault): make the vault helpers' host configurable and their gateway secret optional. All four scripts hardcoded `http://vault-obsidian-personal:9090` and required `GATEWAY_SECRET` to be non-empty, so on a cluster that runs its own git-rest — sun runs `git-rest-openclaw:9090` and `git-rest:9090` — every helper died at `line 7: GATEWAY_SECRET: GATEWAY_SECRET is required` before it could even reach a host that does not exist there. `VAULT_API_URL` now selects the service (default unchanged, so nuke is unaffected) and `X-Gateway-Secret` is sent only when `GATEWAY_SECRET` is set, which matches git-rest's own behaviour: it wraps its API in gateway-secret auth only when it was configured with a secret, so a cluster whose service has none must not require one of the caller. Both halves are tested — a set secret is still sent, an unset one is not, and `VAULT_API_URL` replaces the default rather than being ignored.
 
