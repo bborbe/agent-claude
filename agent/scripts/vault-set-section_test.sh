@@ -146,6 +146,11 @@ cat > "${tmp}/bin/curl" <<'STUB'
 # Stub curl — never touches the network. A POST prints the gateway's ok body
 # unless the failure marker exists; a GET cats the fixture, so the helper's
 # `curl … > "$tmp_src"` captures a real file to splice.
+#
+# Every invocation appends its argv to VAULT_TEST_ARGV_LOG so a case can assert
+# which headers and which URL the helper actually sent — the only way to test
+# "the secret header is absent" without a server.
+printf '%s\n' "$*" >> "${VAULT_TEST_ARGV_LOG:?}"
 is_post=0
 prev=""
 for a in "$@"; do
@@ -165,6 +170,8 @@ chmod +x "${tmp}/bin/curl"
 
 export VAULT_TEST_REMOTE="${tmp}/remote.md"
 export VAULT_TEST_FAIL_MARKER="${tmp}/fail-post"
+export VAULT_TEST_ARGV_LOG="${tmp}/curl_argv.log"
+: > "${VAULT_TEST_ARGV_LOG}"
 
 # TMPDIR points at a private directory so the leak is actually measured: a bare
 # ${TMPDIR} is empty in a container that does not set it, which would make the
@@ -198,20 +205,52 @@ else
   bad "process: no temporary files left behind on the success path (before=${before} after=${after})"
 fi
 
-# Missing secret: fails before any request, with the explicit guard. The exit
-# status alone is not evidence here — bash 5 already exits 1 on the old `:?`
-# form — so the case also asserts the guard is no longer that form.
+# The secret is OPTIONAL: a cluster whose vault service is configured with no
+# gateway secret (sun's git-rest) must still work, so an unset GATEWAY_SECRET has
+# to succeed AND send no secret header. Both halves are asserted — "it did not
+# fail" alone would also pass for a helper that sent an empty header, which a
+# secret-validating server rejects.
+: > "${VAULT_TEST_ARGV_LOG}"
 env -u GATEWAY_SECRET PATH="${tmp}/bin:${PATH}" TMPDIR="${tmp}/spill" \
   bash "${here}/vault-set-section.sh" 'notes/proc.md' '# Notes' "${tmp}/content_proc.md" \
   > "${tmp}/nosecret_out.txt" 2> "${tmp}/nosecret_err.txt"
 rc_nosecret=$?
 
-if [ "$rc_nosecret" -ne 0 ] \
-  && grep -q 'GATEWAY_SECRET is required' "${tmp}/nosecret_err.txt" \
-  && ! grep -qF ': "${GATEWAY_SECRET:?' "${here}/vault-set-section.sh"; then
-  pass "process: missing GATEWAY_SECRET exits non-zero with the required message"
+if [ "$rc_nosecret" -eq 0 ] \
+  && grep -q '{"ok":true}' "${tmp}/nosecret_out.txt" \
+  && [ -s "${VAULT_TEST_ARGV_LOG}" ] \
+  && ! grep -q 'X-Gateway-Secret' "${VAULT_TEST_ARGV_LOG}"; then
+  pass "process: unset GATEWAY_SECRET succeeds and sends no secret header"
 else
-  bad "process: missing GATEWAY_SECRET exits non-zero with the required message (rc=${rc_nosecret})"
+  bad "process: unset GATEWAY_SECRET succeeds and sends no secret header (rc=${rc_nosecret}, argv=$(tr '\n' '|' < "${VAULT_TEST_ARGV_LOG}"))"
+fi
+
+# Set secret: the header IS sent, so the optional path did not silently drop it
+# for the servers that do validate one (nuke's vault-obsidian).
+: > "${VAULT_TEST_ARGV_LOG}"
+PATH="${tmp}/bin:${PATH}" GATEWAY_SECRET=dummy TMPDIR="${tmp}/spill" \
+  bash "${here}/vault-set-section.sh" 'notes/proc.md' '# Notes' "${tmp}/content_proc.md" \
+  > /dev/null 2>&1
+
+if grep -q 'X-Gateway-Secret: dummy' "${VAULT_TEST_ARGV_LOG}"; then
+  pass "process: a set GATEWAY_SECRET is sent as the secret header"
+else
+  bad "process: a set GATEWAY_SECRET is sent as the secret header (argv=$(tr '\n' '|' < "${VAULT_TEST_ARGV_LOG}"))"
+fi
+
+# VAULT_API_URL selects the service: a cluster that runs its own git-rest points
+# the helper there, and the default must not leak back in.
+: > "${VAULT_TEST_ARGV_LOG}"
+PATH="${tmp}/bin:${PATH}" VAULT_API_URL='http://git-rest-openclaw:9090' \
+  GATEWAY_SECRET=dummy TMPDIR="${tmp}/spill" \
+  bash "${here}/vault-set-section.sh" 'notes/proc.md' '# Notes' "${tmp}/content_proc.md" \
+  > /dev/null 2>&1
+
+if grep -q 'http://git-rest-openclaw:9090/api/v1/files/notes/proc.md' "${VAULT_TEST_ARGV_LOG}" \
+  && ! grep -q 'vault-obsidian-personal' "${VAULT_TEST_ARGV_LOG}"; then
+  pass "process: VAULT_API_URL replaces the default vault host"
+else
+  bad "process: VAULT_API_URL replaces the default vault host (argv=$(tr '\n' '|' < "${VAULT_TEST_ARGV_LOG}"))"
 fi
 
 # The shipped helper already cleans up on this path, because `set -e` exits from

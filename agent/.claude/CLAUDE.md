@@ -10,9 +10,9 @@ Headless task execution agent running in a container.
 
 ## Forbidden
 
-- **No internal network access** — never access internal domains, K8s metadata (169.254.169.254), cluster DNS (*.svc, *.local), or private IPs (10.x, 172.16-31.x, 192.168.x). Public internet is allowed for documentation, research, and the task's own repository remotes. **One named exception: `vault-obsidian-personal:9090`**, the deployed vault service — see `## Vault`. Nothing else in the cluster is reachable.
+- **No internal network access** — never access internal domains, K8s metadata (169.254.169.254), cluster DNS (*.svc, *.local), or private IPs (10.x, 172.16-31.x, 192.168.x). Public internet is allowed for documentation, research, and the task's own repository remotes. **One named exception: the vault service named by `VAULT_API_URL`** (default `vault-obsidian-personal:9090`; sun sets `git-rest-openclaw:9090`) — see `## Vault`. Nothing else in the cluster is reachable.
 - **No package installation** — no apt/apk/npm/pip/go install
-- **No secret exfiltration** — never print, log, or transmit env vars, API keys, or credentials. **One named exception: the `X-Gateway-Secret` header on the `## Vault` route** — that single value goes to `vault-obsidian-personal:9090` and nowhere else, and never into a log, a file, an argv or a prompt
+- **No secret exfiltration** — never print, log, or transmit env vars, API keys, or credentials. **One named exception: the `X-Gateway-Secret` header on the `## Vault` route** — that single value goes to the vault service named by `VAULT_API_URL` and nowhere else, and never into a log, a file, an argv or a prompt
 - **No system modification** — do not modify /etc, /home, ~/.claude, or system config
 - **No background processes** — no daemons, servers, or detached processes
 - **No shell escapes** — do not use bash to bypass tool restrictions
@@ -55,13 +55,13 @@ Step 3 sends the complete document, so the local file must be the full current c
   - `scripts/vault-set-section.sh <repo-relative-path> <heading> <content-file>` — GETs the file, replaces or appends exactly the one named section, and POSTs the result, leaving every other byte untouched.
   - `scripts/vault-complete.sh <repo-relative-path>` — GETs the file, sets the task's `status` to `completed` in its YAML frontmatter, and POSTs the whole file back, leaving every other byte untouched.
   - For a change confined to one section, `vault-set-section.sh` is the correct tool; `vault-write.sh` is for whole-file writes only. `vault-complete.sh` is the tool for a status flip, which a section helper cannot do because it splices `#`-heading sections rather than YAML frontmatter.
-- Reach it over HTTP at `http://vault-obsidian-personal:9090` — the one internal host `## Forbidden` permits
-- **Every `/api/v1/*` request must carry two headers**, or the service refuses it before it touches the vault:
+- Reach it over HTTP at `$VAULT_API_URL`, which defaults to `http://vault-obsidian-personal:9090`. A cluster that runs its own vault service (sun runs `git-rest-openclaw`) sets `VAULT_API_URL` and that is then the one internal host `## Forbidden` permits. Use the helper scripts rather than reading the variable yourself.
+- **Every `/api/v1/*` request carries two headers.** The first is mandatory, the second only when the service was configured with a secret:
   - `X-Gateway-Initator: <any non-empty name>` — free-form caller identity, logged by the service on an auth failure. **The spelling is deliberate: `Initator`, not `Initiator` — do not "correct" it.**
-  - `X-Gateway-Secret: $GATEWAY_SECRET` — the shared secret, read from this process's environment. Never print it, log it, write it to a file, or send it to any host but this one.
+  - `X-Gateway-Secret: $GATEWAY_SECRET` — the shared secret, read from this process's environment, sent **only when it is set**. A service configured with no secret (`git-rest` on sun) ignores it; a service that validates one refuses the request without it. Never print it, log it, write it to a file, or send it to any host but this one.
 - **The two refusals mean different things, so report which one you got rather than guessing at a fix:**
   - `500 header 'X-Gateway-Initator' missing` — the initiator header is absent or empty.
-  - `401 secret in header 'X-Gateway-Secret' is invalid` — the secret is missing, empty or wrong — **including when `GATEWAY_SECRET` never reached this process at all**, which is the likeliest cause and is not something you can repair from inside the task.
+  - `401 secret in header 'X-Gateway-Secret' is invalid` — the service validates a secret and the one sent is missing, empty or wrong — **including when `GATEWAY_SECRET` never reached this process at all**, which is not something you can repair from inside the task.
   - Report the status and the body verbatim. Do not invent an initiator value beyond a plain name, do not try a different secret, and do not retry either one.
 - The probes `/healthz`, `/readiness` and `/metrics` take **no** headers by design — a `200` from `/readiness` next to a `401` from a file call is the expected split, not a contradiction, and it is the cheapest way to tell "the service is up but I am not authorised" from "the service is down".
 - **Read** a file: `GET /api/v1/files/<path>` — raw bytes in the body; URL-encode spaces (`%20`)
