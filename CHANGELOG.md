@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- fix(vault): forward `VAULT_API_URL` to the Claude child. v0.29.0 made the helpers' host configurable, but `github.com/bborbe/agent` replaces the child environment with a fixed allowlist and `main.go` only re-adds the variables it names — so the pod's `VAULT_API_URL` never reached the Bash tool, the helpers fell back to `http://vault-obsidian-personal:9090`, and a cluster running its own git-rest saw every request addressed to a host it does not have. Measured on sun 2026-11-13: the Job's env read `git-rest-openclaw.agent:9090` while the egress proxy logged `GET http://vault-obsidian-personal:9090/api/v1/files/…`, which is why the helpers returned curl exit 22 with no body and the misconfiguration read as an authorization failure. Same forwarding rule as `GATEWAY_SECRET`, `HTTP_PROXY` and the GitHub App triple.
+
 ## v0.29.0
 
 - fix(vault): make the vault helpers' host configurable and their gateway secret optional. All four scripts hardcoded `http://vault-obsidian-personal:9090` and required `GATEWAY_SECRET` to be non-empty, so on a cluster that runs its own git-rest — sun runs `git-rest-openclaw:9090` and `git-rest:9090` — every helper died at `line 7: GATEWAY_SECRET: GATEWAY_SECRET is required` before it could even reach a host that does not exist there. `VAULT_API_URL` now selects the service (default unchanged, so nuke is unaffected) and `X-Gateway-Secret` is sent only when `GATEWAY_SECRET` is set, which matches git-rest's own behaviour: it wraps its API in gateway-secret auth only when it was configured with a secret, so a cluster whose service has none must not require one of the caller. Both halves are tested — a set secret is still sent, an unset one is not, and `VAULT_API_URL` replaces the default rather than being ignored.
