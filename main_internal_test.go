@@ -354,6 +354,19 @@ var _ = Describe("application.buildClaudeEnv", func() {
 		}))
 	})
 
+	// The host half of the same allowlist gap, and the more deceptive one: a pod
+	// whose env points the helpers at its own cluster's git-rest still runs them
+	// against the built-in default, so the request is addressed to a host that
+	// cluster does not have. Measured on sun 2026-11-13 — the Job read
+	// `git-rest-openclaw.agent:9090` while every helper call reached the egress
+	// proxy addressed to `vault-obsidian-personal:9090`.
+	It("forwards VAULT_API_URL to the Claude child", func() {
+		app := &application{VaultAPIURL: "http://git-rest-openclaw.agent:9090"}
+		Expect(app.buildClaudeEnv()).To(Equal(map[string]string{
+			"VAULT_API_URL": "http://git-rest-openclaw.agent:9090",
+		}))
+	})
+
 	It("lets the dedicated GatewaySecret field override the same key from CLAUDE_ENV", func() {
 		app := &application{
 			ClaudeEnvRaw:  "GATEWAY_SECRET=from-claude-env,FOO=bar",
