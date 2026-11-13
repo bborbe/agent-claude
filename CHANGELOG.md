@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.29.1
 
 - fix(vault): forward `VAULT_API_URL` to the Claude child. v0.29.0 made the helpers' host configurable, but `github.com/bborbe/agent` replaces the child environment with a fixed allowlist and `main.go` only re-adds the variables it names — so the pod's `VAULT_API_URL` never reached the Bash tool, the helpers fell back to `http://vault-obsidian-personal:9090`, and a cluster running its own git-rest saw every request addressed to a host it does not have. Measured on sun 2026-11-13: the Job's env read `git-rest-openclaw.agent:9090` while the egress proxy logged `GET http://vault-obsidian-personal:9090/api/v1/files/…`, which is why the helpers returned curl exit 22 with no body and the misconfiguration read as an authorization failure. Same forwarding rule as `GATEWAY_SECRET`, `HTTP_PROXY` and the GitHub App triple.
 
