@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## Unreleased
+## v0.29.2
 
 - chore: bump `github.com/bborbe/agent` to v0.146.0. It carries the run's four token counts and a per-run `metrics_runs` history onto the task file (written by the claude deliverer), so `bborbe/agent-task-executor`'s per-window `tokenCeiling` has something to sum. Version pin only — no code changes.
 
