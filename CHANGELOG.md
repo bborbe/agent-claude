@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## Unreleased
+
+- chore: update github.com/a2aproject/a2a-go/v2 to v2.9.0, github.com/bborbe/agent to v0.149.0, github.com/bborbe/argument/v2 to v2.13.13, github.com/bborbe/cqrs to v0.6.18, github.com/bborbe/errors to v1.7.1, github.com/bborbe/k8s to v1.16.2, github.com/bborbe/kafka to v1.30.4, github.com/bborbe/run to v1.13.0, github.com/bborbe/sentry to v1.11.1, github.com/bborbe/service to v1.12.2, github.com/bborbe/time to v1.27.30, github.com/bborbe/vault-cli to v0.200.6
+
 ## v0.29.3
 
 - chore: remove stale vulnerability ignore IDs that no longer apply (govulncheck, trivy)
